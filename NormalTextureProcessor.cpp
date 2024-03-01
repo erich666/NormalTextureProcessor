@@ -50,11 +50,11 @@ static wchar_t gConcatErrorString[CONCAT_ERROR_LENGTH];
 #define IMAGE_ALMOST2_VALID_NORMALS_ZERO	0x0800
 #define	IMAGE_VALID_NORMALS_XY				0x1000
 
-#define IMAGE_TYPE_NORMAL_FULL	1
-#define IMAGE_TYPE_NORMAL_ZERO	2
-#define IMAGE_TYPE_HEIGHTFIELD_R	3
-#define IMAGE_TYPE_HEIGHTFIELD_G	4
-#define IMAGE_TYPE_HEIGHTFIELD_B	5
+#define IMAGE_TYPE_NORMAL_FULL		1
+#define IMAGE_TYPE_NORMAL_FULL_SAME	2
+#define IMAGE_TYPE_NORMAL_ZERO		3
+#define IMAGE_TYPE_NORMAL_XY_ONLY	4
+#define IMAGE_TYPE_HEIGHTFIELD		5
 
 
 // for command line parsing
@@ -108,6 +108,8 @@ static wchar_t gConcatErrorString[CONCAT_ERROR_LENGTH];
 #define CONVERT_ZERO_TO_CHANNEL(val, chan)	\
 	chan = (unsigned char)((val)*255.0f + 0.5f);
 
+#define COMPUTE_Z_FROM_XY(x,y, z)	\
+	z = sqrt(1.0f - ((x) * (x) + (y) * (y)));
 
 // maximum difference in length from 1.0 for normals when saving in [0,255] numbers,
 // when Z value is computed from X and Y
@@ -135,6 +137,16 @@ struct Options {
 
 Options gOptions;
 
+std::wstring gListUnknown;
+std::wstring gListStandard;
+std::wstring gListStandardDirty;
+std::wstring gListStandardSame;
+std::wstring gListZZero;
+std::wstring gListZZeroDirty;
+std::wstring gListXYonly;
+std::wstring gListHeightfield;
+
+
 //-------------------------------------------------------------------------
 void printHelp();
 
@@ -143,9 +155,8 @@ static bool processImageFile(wchar_t* inputFile, int fileType);
 static void reportReadError(int rc, const wchar_t* filename);
 static void saveErrorForEnd();
 
-static void copyPNG(progimage_info* dst, progimage_info* src);
-static bool cleanNormalMap(progimage_info& imageInfo, int type);
-static int convertHeightfieldToXYZ(progimage_info* src, float heightfieldScale);
+void convertHeightfieldToXYZ(progimage_info* dst, progimage_info* src, float heightfieldScale, bool y_flip);
+void cleanAndCopyNormalTexture(progimage_info* dst, progimage_info* src, bool must_clean, bool output_zzero, bool y_flip);
 
 bool removeFileType(wchar_t* name);
 int isImageFile(wchar_t* name);
@@ -160,7 +171,7 @@ int wmain(int argc, wchar_t* argv[])
 	//   maximum z difference detected is 0.00391376 for the 51040 valid pixel values
 	// Fun fact: 51040 combinations out of 256*256 of red and green combinations are valid, else red and green's defined length is > 1.0.
 	// So 77.88% of all r,g combinations [0..255],[0..255] are valid.
-//#define	SCRATCHPAD
+//#define SCRATCHPAD
 #ifdef SCRATCHPAD
 	// This is just a place to check on such things, such as valid r,g combinations and how much various values vary in floating point.
 	int row, col;
@@ -174,11 +185,15 @@ int wmain(int argc, wchar_t* argv[])
 		for (col = 0; col < 256; col++) {
 			// really just getting the x and y here:
 			CONVERT_RGB_TO_Z_FULL(col, row, 255, x, y, z);
-			// find the proper z value
-			if (1.0f >= (x * x + y * y)) {	// could be 1.0f + MAX_NORMAL_LENGTH_DIFFERENCE, now that we know this value, I guess
-				z = sqrt(1.0f - (x * x + y * y));
+
+			// is X and Y valid, forming a vector <= 1.0 in length?
+			if ((x * x + y * y) <= 1.0f) {
+				// find the proper z value that normalizes this vector
+				COMPUTE_Z_FROM_XY(x, y, z);
 				validcount++;
+				// convert back to rgb
 				CONVERT_Z_FULL_TO_RGB(x, y, z, r, g, b);
+				// and then to xyz again (really just need to convert Z in both cases)
 				CONVERT_RGB_TO_Z_FULL(r, g, b, x, y, znew);
 				// now, how far off from 1.0 is the xyz vector length?
 				len = VECTOR_LENGTH(x, y, znew);
@@ -192,6 +207,14 @@ int wmain(int argc, wchar_t* argv[])
 					zmaxdiff = zabsdiff;
 				}
 				// std::wcout << absdiff << "\n";
+				// last little reality check: does it round-trip?
+				unsigned char r1, g1, b1;
+				CONVERT_Z_FULL_TO_RGB(x, y, z, r1, g1, b1);
+				// this passes with flying colors
+				assert(r == r1 && g == g1 && b == b1);
+				if (r != r1 || g != g1 || b != b1) {
+					std::cerr << "ERROR: something weird's going on, the round trip test failed.\n" << std::flush;
+				}
 			}
 		}
 	}
@@ -268,8 +291,9 @@ int wmain(int argc, wchar_t* argv[])
 			INC_AND_TEST_ARG_INDEX(argLoc);
 			swscanf_s(argv[argLoc], L"%f", &gOptions.heightfieldScale);
 		}
-		else if (wcscmp(argv[argLoc], L"-iwrap") == 0)
+		else if (wcscmp(argv[argLoc], L"-hwrap") == 0)
 		{
+			// TODO; and should there be a "continue slope" option for the border, too?
 			gOptions.wrapHeightfield = true;
 		}
 		else if (wcscmp(argv[argLoc], L"-v") == 0)
@@ -293,12 +317,31 @@ int wmain(int argc, wchar_t* argv[])
 		std::wcout << "NormalTextureProcessor version " << VERSION_STRING << "/n" << std::flush;
 	}
 
-	if (gOptions.outputZzeroToOne && !(gOptions.outputOpenGL || gOptions.outputDirectX)) {
-		std::wcerr << "ERROR: output option -ozzero is set but the output type -oogl or -odx is not. You likely want -oogl, but for this less-used Z = [0,1] output format you must choose. Aborting.\n" << std::flush;
-		printHelp();
-		return 1;
+	// check validity of options only if we're actually outputing
+	if (gOptions.outputAll || gOptions.outputClean) {
+		if (gOptions.inputOpenGL && gOptions.inputDirectX) {
+			std::wcerr << "ERROR: You can pick only one input type, either -iogl for OpenGL-style (Y up) or -idx for DirectX-style (Y down). Aborting.\n" << std::flush;
+			printHelp();
+			return 1;
+		}
+		if (gOptions.outputOpenGL && gOptions.outputDirectX) {
+			std::wcerr << "ERROR: You can pick only one output type, either -oogl for OpenGL-style (Y up) or -odx for DirectX-style (Y down). Aborting.\n" << std::flush;
+			printHelp();
+			return 1;
+		}
+		if (!(gOptions.inputOpenGL || gOptions.inputDirectX) && (gOptions.outputOpenGL || gOptions.outputDirectX)) {
+			std::wcerr << "ERROR: Since output style is specified, you must pick at least one input style, either -iogl for OpenGL-style (Y up) or -idx for DirectX-style (Y down). Aborting.\n" << std::flush;
+			printHelp();
+			return 1;
+		}
+		if ((gOptions.inputOpenGL || gOptions.inputDirectX) && !(gOptions.outputOpenGL || gOptions.outputDirectX)) {
+			std::wcerr << "ERROR: Since input style is specified, you must pick at least one output style, either -oogl for OpenGL-style (Y up) or -odx for DirectX-style (Y down). Aborting.\n" << std::flush;
+			printHelp();
+			return 1;
+		}
 	}
 
+	int pos;
 	// Does input directory exist?
 	if (gOptions.inputDirectory.size() > 0) {
 		// not the current directory, so check
@@ -319,6 +362,12 @@ int wmain(int argc, wchar_t* argv[])
 				return 1;
 			}
 		}
+		// add a "/" to the output directory path if not there; do it now
+		pos = (int)gOptions.outputDirectory.size() - 1;
+		// TODOTODO - test with "\" at end of input directory
+		if (gOptions.outputDirectory[pos] != '/' && gOptions.outputDirectory[pos] != '\\') {
+			gOptions.outputDirectory.push_back('/');
+		}
 	}
 
 	// look through files and process each one.
@@ -331,9 +380,9 @@ int wmain(int argc, wchar_t* argv[])
 	wcscpy_s(fileSearch, MAX_PATH, gOptions.inputDirectory.c_str());
 	if (gOptions.inputDirectory.size() > 0) {
 		// input directory exists, so make sure there's a "\" or "/" at the end of this path
-		int pos = (int)gOptions.inputDirectory.size() - 1;
+		pos = (int)gOptions.inputDirectory.size() - 1;
 		// TODOTODO - test with "\" at end of input directory
-		if (gOptions.inputDirectory.c_str()[pos] != '/' && gOptions.inputDirectory.c_str()[pos] != '\\') {
+		if (gOptions.inputDirectory[pos] != '/' && gOptions.inputDirectory[pos] != '\\') {
 			wcscat_s(fileSearch, MAX_PATH, L"/");
 		}
 	}
@@ -373,7 +422,48 @@ int wmain(int argc, wchar_t* argv[])
 		std::wcerr << " generated.\n" << std::flush;
 	}
 
-	std::wcout << "NormalTextureProcessor summary: " << filesFound << " PNG and TGA files discovered and " << filesProcessed << " processed.\n" << std::flush;
+	if (gOptions.analyze) {
+		// summary lists of different file types
+		std::wcout << "==============================\nFile types found, by category:\n";
+		bool output_any = false;
+		if (gListStandardSame.size() > 0) {
+			output_any = true;
+			std::wcout << "  Standard normal textures that have no bumps, all texels are the same value:" << gListStandardSame << "\n";
+		}
+		if (gListStandard.size() > 0) {
+			output_any = true;
+			std::wcout << "  Standard normal textures:" << gListStandard << "\n";
+			if (gListStandardDirty.size() > 0) {
+				output_any = true;
+				std::wcout << "    Standard normal textures that are not as expected:" << gListStandardDirty << "\n";
+			}
+		}
+		if (gListZZero.size() > 0) {
+			output_any = true;
+			std::wcout << "  Z-Zero normal textures:" << gListZZero << "\n";
+			if (gListZZeroDirty.size() > 0) {
+				output_any = true;
+				std::wcout << "    Z-Zero normal textures that are not as expected:" << gListZZeroDirty << "\n";
+			}
+		}
+		if (gListXYonly.size() > 0) {
+			output_any = true;
+			std::wcout << "  XY-only normal textures:" << gListXYonly << "\n";
+		}
+		if (gListHeightfield.size() > 0) {
+			output_any = true;
+			std::wcout << "  Heightfield textures:" << gListHeightfield << "\n";
+		}
+		if (gListUnknown.size() > 0) {
+			output_any = true;
+			std::wcout << "  Unknown textures:" << gListUnknown << "\n";
+		}
+		if (!output_any) {
+			std::wcout << "  (No PNG or TGA files found to analyze)\n";
+		}
+	}
+
+	std::wcout << "\nNormalTextureProcessor summary: " << filesFound << " PNG/TGA files discovered and " << filesProcessed << " processed.\n" << std::flush;
 	return 0;
 }
 
@@ -401,7 +491,7 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 
 	int row, col, channel;
 	int image_field_bits = 0x0;
-	float x, y, z, zcalc, zzero;
+	float x, y, z, zcalc;
 	unsigned char* src_data = &imageInfo.image_data[0];
 	// various counters
 	int pixels_match = 0;
@@ -417,7 +507,6 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 	int normal_length_zzero[3];
 	normal_length_zzero[0] = normal_length_zzero[1] = normal_length_zzero[2] = 0;
 	float min_z = 999.0f;
-	int normal_length_zneg_one = 0;
 	int zmaxabsdiff = 0;
 	int zmaxabsdiff_zero = 0;
 	unsigned char first_pixel[3];
@@ -467,7 +556,7 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 
 				// determine what z really should be for this x,y pair
 				if (xy_len <= 1.0f) {
-					zcalc = sqrt(1.0f - (x * x + y * y));
+					COMPUTE_Z_FROM_XY(x, y, zcalc);
 				}
 				else {
 					// x,y's length is a tiny bit above 1.0 in length, but still not unreasonable.
@@ -567,6 +656,7 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 	if (image_field_bits & (IMAGE_VALID_NORMALS_FULL | IMAGE_ALMOST_VALID_NORMALS_FULL | IMAGE_ALMOST2_VALID_NORMALS_FULL)) {
 		image_type = IMAGE_TYPE_NORMAL_FULL;
 		if (image_field_bits & IMAGE_ALL_SAME) {
+			image_type = IMAGE_TYPE_NORMAL_FULL_SAME;
 			if (gOptions.analyze) {
 				std::wcout << "Image file '" << inputFile << "' is a normal texture, but all the values are the same (normals do not vary).\n";
 			}
@@ -629,7 +719,7 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 		}
 	}
 	else if (image_field_bits & IMAGE_GRAYSCALE) {
-		image_type = IMAGE_TYPE_HEIGHTFIELD_R;
+		image_type = IMAGE_TYPE_HEIGHTFIELD;
 		if (image_field_bits & IMAGE_ALL_SAME) {
 			if (gOptions.analyze) {
 				std::wcout << "Image file '" << inputFile << "' is likely a heightfield (grayscale) texture, but all the values are the same (normals do not vary).\n";
@@ -644,34 +734,43 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 	else {
 		// We're really not sure at this point. Try some "close enough" tests. Could get more refined here, e.g., set error bounds.
 		must_clean = true;
+		// which has fewer values outside the bounds?
 		if (z_outside_bounds < z_outside_zero_bounds) {
-			image_type = IMAGE_TYPE_NORMAL_FULL;
-			if (image_field_bits & IMAGE_VALID_ZVAL_NONNEG) {
+			// how much did the z value vary from expected?
+			if (zmaxabsdiff > 2) {
+				image_type = IMAGE_TYPE_NORMAL_XY_ONLY;
 				if (gOptions.analyze) {
-					std::wcout << "Image file '" << inputFile << "' may be a normal texture, with " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texel Z values being more than two from being properly normalized.\n";
+					std::wcout << "Image file '" << inputFile << "' is probably an XY-only normal texture,\n  with at least " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texel Z values being more than two from being properly normalized.\n";
+					std::wcout << "  The z value was found to be as far off as " << zmaxabsdiff << " in expected value,\n  and was greater than a difference of two for " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texels.\n";
 				}
 			}
 			else {
-				if (gOptions.analyze) {
-					std::wcout << "Image file '" << inputFile << "' might be a normal texture, with " << 100.0f * (float)normal_zval_nonnegative / (float)image_size << " percent of the Z values being non-negative.\n";
+				image_type = IMAGE_TYPE_NORMAL_FULL;
+				if (image_field_bits & IMAGE_VALID_ZVAL_NONNEG) {
+					if (gOptions.analyze) {
+						std::wcout << "Image file '" << inputFile << "' may be a normal texture, with " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texel Z values being more than two from being properly normalized.\n";
+					}
 				}
-			}
-			// how much did the z value vary from expected?
-			if (zmaxabsdiff > 2) {
-				if (gOptions.analyze) {
-					std::wcout << "  The z value was found to be as far off as " << zmaxabsdiff << " in expected value,\n  and was greater than two difference for " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texels.\n  It may just be that the Z values are wonky or used for some other data (e.g., ambient occlusion),\n  since the Z value can be computed from X and Y.\n";
+				else {
+					if (gOptions.analyze) {
+						std::wcout << "Image file '" << inputFile << "' might be a normal texture, with " << 100.0f * (float)normal_zval_nonnegative / (float)image_size << " percent of the Z values being non-negative.\n";
+					}
 				}
 			}
 		}
 		else {
-			image_type = IMAGE_TYPE_NORMAL_ZERO;
-			if (gOptions.analyze) {
-				std::wcout << "Image file '" << inputFile << "' may be a normal texture with Z ranging from 0.0 to 1.0.\n";
-			}
 			// how much did the z value vary from expected?
 			if (zmaxabsdiff_zero > 2) {
+				image_type = IMAGE_TYPE_NORMAL_XY_ONLY;
 				if (gOptions.analyze) {
-					std::wcout << "  The z value was found to be as far off as " << zmaxabsdiff_zero << " in expected value,\n  and was greater than two difference for " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texels.\n  It may just be that the Z values are wonky or used for some other data (e.g., ambient occlusion),\n  since the Z value can be computed from X and Y.\n";
+					std::wcout << "Image file '" << inputFile << "' is probably an XY-only normal texture,\n  with at least " << 100.0f * (float)z_outside_zero_bounds / (float)image_size << " percent of the texel Z values being more than two from being properly normalized.\n";
+					std::wcout << "  The z value was found to be as far off as " << zmaxabsdiff_zero << " in expected value,\n  and was greater than a difference of two for " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texels.\n";
+				}
+			}
+			else {
+				image_type = IMAGE_TYPE_NORMAL_ZERO;
+				if (gOptions.analyze) {
+					std::wcout << "Image file '" << inputFile << "' may be a normal texture with Z ranging from 0.0 to 1.0.\n";
 				}
 			}
 		}
@@ -688,31 +787,103 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 	if (!(image_field_bits & IMAGE_ALL_SAME)) {
 		if (image_field_bits & IMAGE_R_CHANNEL_ALL_SAME) {
 			if (gOptions.analyze) {
-				std::wcout << "  The red channel in file '" << inputFile << "' all have the same value: " << first_pixel[0] << "\n";
+				std::wcout << "  The red channel values in file '" << inputFile << "' all have the same value: " << first_pixel[0] << "\n";
 			}
 		}
 		if (image_field_bits & IMAGE_G_CHANNEL_ALL_SAME) {
 			if (gOptions.analyze) {
-				std::wcout << "  The green channel in file '" << inputFile << "' all have the same value: " << first_pixel[1] << "\n";
+				std::wcout << "  The green channel values in file '" << inputFile << "' all have the same value: " << first_pixel[1] << "\n";
 			}
 		}
 		if (image_field_bits & IMAGE_B_CHANNEL_ALL_SAME) {
 			if (gOptions.analyze) {
-				std::wcout << "  The blue channel in file '" << inputFile << "' all have the same value: " << first_pixel[2] << "\n";
+				std::wcout << "  The blue channel values in file '" << inputFile << "' all have the same value: " << first_pixel[2] << "\n";
 			}
 		}
 	}
+	if (gOptions.analyze) {
+		// whitespace between analyses, and flush
+		std::wcout << "\n" << std::flush;
 
-	//if (imageProcessed) {
-	//	// now see if we want to analyze or manipulate and output the file
-	//	if (gOptions.analyze) {
-	//		// TODOTODO - can be more elaborate
-	//	}
+		// Add to proper summary list.
+		std::wstring if_string = inputFile;
+		switch (image_type) {
+		case 0x0:
+			gListUnknown += L" " + if_string;
+			break;
+		case IMAGE_TYPE_NORMAL_FULL:
+			gListStandard += L" " + if_string;
+			if (must_clean) {
+				gListStandardDirty += L" " + if_string;
+			}
+			break;
+		case IMAGE_TYPE_NORMAL_FULL_SAME:
+			gListStandardSame += L" " + if_string;
+			break;
+		case IMAGE_TYPE_NORMAL_ZERO:
+			gListZZero += L" " + if_string;
+			if (must_clean) {
+				gListZZeroDirty += L" " + if_string;
+			}
+			break;
+		case IMAGE_TYPE_NORMAL_XY_ONLY:
+			gListXYonly += L" " + if_string;
+			break;
+		case IMAGE_TYPE_HEIGHTFIELD:
+			gListHeightfield += L" " + if_string;
+			break;
+		}
+	}
 
-	//	if (gOptions.outputOpenGL || gOptions.outputDirectX) {
-	//		// output file by transforming input
-	//	}
-	//}
+	// Now see if we want to output the file
+	if ((image_type > 0) && (gOptions.outputAll || (must_clean && gOptions.outputClean))) {
+		// Output all or output clean file
+		
+		// Do we flip the Y axis on output? Do only if parity doesn't match
+		bool y_flip = ((gOptions.inputDirectX && !gOptions.outputOpenGL) || (gOptions.inputOpenGL && !gOptions.outputDirectX));
+
+		// make output image info
+		progimage_info destination;
+		destination.width = imageInfo.width;
+		destination.height = imageInfo.height;
+		destination.image_data.resize(destination.width * destination.height * 3 * sizeof(unsigned char), 0x0);
+
+		if (image_type == IMAGE_TYPE_HEIGHTFIELD) {
+			// For heightfields, we pay attention to just the output format specified.
+			y_flip = gOptions.outputDirectX;
+
+			// convert from heightfield
+			if (gOptions.verbose) {
+				std::wcout << ">> Converting heightfield to normal texture.\n" << std::flush;
+			}
+			convertHeightfieldToXYZ(&destination, &imageInfo, gOptions.heightfieldScale, y_flip);
+		} else {
+			// input is a normal texture of some type, so output it, cleaning as needed, flipping y if needed.
+			if (gOptions.verbose) {
+				std::wcout << ">> Readying output normal texture.\n" << std::flush;
+			}
+			cleanAndCopyNormalTexture(&destination, &imageInfo, must_clean, gOptions.outputZzeroToOne, y_flip);
+		}
+
+		// The outputFile has the same file name as the inputFile, possibly different path.
+		// Walk through inputFile and get just the file bit
+		//wchar_t* fileName;
+
+		//wchar_t outputFile[MAX_PATH];
+		//wcscpy_s(outputFile, MAX_PATH, gOptions.outputDirectory.c_str());
+
+		//rc = writepng(&destination, 3, outputFile);
+		//if (rc != 0)
+		//{
+		//	reportReadError(rc, outputFile);
+		//	// quit
+		//	return 1;
+		//}
+		//writepng_cleanup(&destination);
+		//if (gOptions.verbose) {
+		//	std::wcout << "New texture '" << outputFile << "' created.\n" << std::flush;
+		//}
+	}
 
 	// clean up input image info.
 	readImage_cleanup(1, &imageInfo);
@@ -722,9 +893,20 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 void printHelp()
 {
 	std::wcerr << "NormalTextureProcessor version " << VERSION_STRING << "\n";
-	std::wcerr << "usage: NormalTextureProcessor [-v]\n";
+	std::wcerr << "usage: NormalTextureProcessor [-options] [file1.png file2.png...]\n";
+	std::wcerr << "  -a - analyze texture files read in and output report.\n";
+	std::wcerr << "  -idir path - give a relative or absolute path for what directory of files to read in.\n";
+	std::wcerr << "  -iogl - assume input files use OpenGL-style (Y up) mapping for the green channel.\n";
+	std::wcerr << "  -idx - assume input files use DirectX-style (Y down) mapping for the green channel.\n";
+	std::wcerr << "  -oall - output all texture files read in, as possible.\n";
+	std::wcerr << "  -oclean - clean and output all texture files that are not considered perfect.\n";
+	std::wcerr << "  -odir path - give a relative or absolute path for what directory to output files.\n";
+	std::wcerr << "  -ozzero - output files so that their blue channel value maps Z from 0 to 1 instead of -1 to 1.\n";
+	std::wcerr << "  -oogl - output files using the OpenGL-style (Y up) mapping for the green channel.\n";
+	std::wcerr << "  -odx - output files using the DirectX-style (Y down) mapping for the green channel.\n";
+	std::wcerr << "  -hfs # - for heightfields, specify output scale.\n";
+	std::wcerr << "  -hwrap - treat heightfields as wrapping around (repeating) when output to a normal texture.\n";
 	std::wcerr << "  -v - verbose, explain everything going on. Default: display only warnings and errors.\n";
-	// TODOTODO
 	std::wcerr << std::flush;
 }
 
@@ -791,189 +973,19 @@ static void saveErrorForEnd()
 
 //================================ Image Manipulation ====================================
 
-// TODOTODO - needed?
-static void getPNGPixel(progimage_info* src, int channels, int col, int row, unsigned char* color)
-{
-	unsigned char* src_data;
-
-	// LodePNG does all the work for us, going to RGBA by default:
-	src_data = &src->image_data[0] + (row * src->width + col) * channels;
-	memcpy(color, src_data, channels);
-}
-
-// TODOTODO - needed?
-// assumes we want to match the source to fit the destination
-static void copyPNG(progimage_info* dst, progimage_info* src)
-{
-	if (dst->width == src->width)
-	{
-		memcpy(&dst->image_data[0], &src->image_data[0], src->width * src->height * 4);
-	}
-	//else if (dst->width > src->width)
-	//{
-	//	// magnify
-
-	//	// check that zoom factor is an integer (really should be a power of two)
-	//	assert((dst->width / src->width) == (float)((int)(dst->width / src->width)));
-	//	zoom = dst->width / src->width;
-	//	assert((unsigned long)dst->height >= src->height * zoom);
-
-	//	src_data = &src->image_data[0];
-	//	numrow = (unsigned long)src->height;
-	//	numcol = (unsigned long)src->width;
-	//	for (row = 0; row < numrow; row++)
-	//	{
-	//		dst_data = &dst->image_data[0] + row * (unsigned long)dst->width * zoom * 4;
-	//		for (col = 0; col < numcol; col++)
-	//		{
-	//			for (zoomrow = 0; zoomrow < zoom; zoomrow++)
-	//			{
-	//				for (zoomcol = 0; zoomcol < zoom; zoomcol++)
-	//				{
-	//					memcpy(dst_data + (zoomrow * (unsigned long)dst->width + zoomcol) * 4, src_data, 4);
-	//				}
-	//			}
-	//			dst_data += zoom * 4;	// move to next column
-	//			src_data += 4;
-	//		}
-	//	}
-	//}
-	//else
-	//{
-	//	// minify: squish source into destination
-
-	//	// check that zoom factor is an integer (really should be a power of two)
-	//	assert((src->width / dst->width) == (float)((int)(src->width / dst->width)));
-	//	zoom = src->width / dst->width;
-	//	assert((unsigned long)dst->height * zoom >= (unsigned long)src->height);
-	//	zoom2 = zoom * zoom;
-
-	//	dst_data = &dst->image_data[0];
-	//	numrow = (unsigned long)dst->height;
-	//	numcol = (unsigned long)dst->width;
-	//	for (row = 0; row < numrow; row++)
-	//	{
-	//		src_data = &src->image_data[0] + row * src->width * zoom * 4;
-	//		for (col = 0; col < numcol; col++)
-	//		{
-	//			sumR = sumG = sumB = sumA = 0;
-	//			for (zoomrow = 0; zoomrow < zoom; zoomrow++)
-	//			{
-	//				for (zoomcol = 0; zoomcol < zoom; zoomcol++)
-	//				{
-	//					src_loc = src_data + (zoomrow * src->width + zoomcol) * 4;
-	//					sumR += (unsigned int)*src_loc++;
-	//					sumG += (unsigned int)*src_loc++;
-	//					sumB += (unsigned int)*src_loc++;
-	//					sumA += (unsigned int)*src_loc++;
-	//				}
-	//			}
-	//			*dst_data++ = (unsigned char)(sumR / zoom2);
-	//			*dst_data++ = (unsigned char)(sumG / zoom2);
-	//			*dst_data++ = (unsigned char)(sumB / zoom2);
-	//			*dst_data++ = (unsigned char)(sumA / zoom2);
-	//			// move to next column
-	//			src_data += zoom * 4;
-	//		}
-	//	}
-	//}
-}
-
-// Check that each normal doesn't point downward, and that it is nearly 1.0 in length.
-// Returns true if the texture was already clean, no corrections, false if corrections were made.
-// Basically, type -1 or 1 (from above) means convert Z from -1 to 1 range; type 0 means 0 to 1 range for Z.
-static bool cleanNormalMap(progimage_info& imageInfo, int type)
+// assumes 3 channels are input
+void convertHeightfieldToXYZ(progimage_info* dst, progimage_info* src, float heightfieldScale, bool y_flip)
 {
 	int row, col;
-	float xyz[3];
-	unsigned char* src_data = &imageInfo.image_data[0];
-	bool clamped = false;
-	bool retval = true;
-	float len;
-
-	for (row = 0; row < imageInfo.height; row++)
-	{
-		for (col = 0; col < imageInfo.width; col++)
-		{
-			if (src_data[0] > 5 || src_data[1] > 5 || src_data[2] > 5) {
-				// else black pixel, or near black, some background thing, so skip
-
-				// Smoolistic, for example, sets unused areas to white. Better to make these "no normals"
-				// to avoid any interpolation funniness around the edges.
-				if (src_data[0] == 255 && src_data[1] == 255 && src_data[2] == 255) {
-					src_data[0] = 128;
-					src_data[1] = 128;
-				}
-				else {
-					if (type != 0 && src_data[2] < 128) {
-						// hey, a normal is pointing into the surface; that shouldn't happen
-						//assert(0);
-						// corrective action, e.g., clamp
-						src_data[2] = 128;
-						clamped = true;
-						retval = false;
-					}
-					// now check if normal is around 1.0 in length
-					for (int ch = 0; ch < 2; ch++)
-					{
-						xyz[ch] = ((float)src_data[ch] / 255.0f) * 2.0f - 1.0f;
-					}
-					// All Z's in image are 255, so Z needs to be derived from X and Y.
-					// (Even if the Z's are correct, i.e., the normal map is flat, "correcting" won't hurt here.)
-					if (type == 2) {
-						// derive Z from XY values
-						len = 1.0f - xyz[0] * xyz[0] - xyz[1] * xyz[1];
-						if (len >= 0.0f) {
-							xyz[2] = (float)sqrt(len);
-						}
-						else {
-							// If the length of the X and Y component vector is greater than 1, who
-							// the heck knows what's going on. I guess go renormalize the whole thing.
-							assert(len > -0.02f);
-							xyz[2] = 0.0f;
-							goto Renormalize;
-						}
-						src_data[2] = (unsigned char)(255.0f * ((xyz[2] + 1.0f) / 2.0f) + 0.5f);
-						retval = false;
-					}
-					else {
-						xyz[2] = (type != 0) ? ((float)src_data[2] / 255.0f) * 2.0f - 1.0f : (float)src_data[2] / 255.0f;
-					Renormalize:
-						len = xyz[0] * xyz[0] + xyz[1] * xyz[1] + xyz[2] * xyz[2];
-						// test whether normal is around 1.0f in length, or if we're going to type -1 from type 0.
-						if (type == 0 || clamped || len > 1.02f || len < 0.98f) {
-							clamped = false;
-							//assert(0);
-							// corrective action, e.g., renormalize
-							len = (float)sqrt(len);
-							// we always convert to -1 to 1 range
-							for (int ch = 0; ch < 3; ch++)
-							{
-								src_data[ch] = (unsigned char)(255.0f * (((xyz[ch] / len) + 1.0f) / 2.0f) + 0.5f);
-							}
-							retval = false;
-						}
-					}
-				}
-			}
-			src_data += 3;
-		}
-	}
-	return retval;
-}
-
-// assumes 3 channels
-// could return largest difference in heights. If 0, then the resulting normal map is flat
-static int convertHeightfieldToXYZ(progimage_info* src, float heightfieldScale)
-{
-	int row, col;
+	// create temporary grayscale image of input and work off of that, putting the result in the output dst file
 	progimage_info* phf = allocateGrayscaleImage(src);
 	copyOneChannel(phf, CHANNEL_RED, src, LCT_RGB);
 	unsigned char* phf_data = &phf->image_data[0];
-	unsigned char* src_data = &src->image_data[0];
+	unsigned char* dst_data = &dst->image_data[0];
 
 	for (row = 0; row < phf->height; row++)
 	{
+		// TODOTODO - right now we always wrap around edges, grabbing the texel off the other edge. Other options possible.
 		int trow = (row + phf->height - 1) % phf->height;
 		int brow = (row + phf->height + 1) % phf->height;
 		for (col = 0; col < phf->width; col++)
@@ -985,14 +997,84 @@ static int convertHeightfieldToXYZ(progimage_info* src, float heightfieldScale)
 			// https://www.geometrictools.com/Documentation/ReconstructHeightFromNormals.pdf
 			float x = heightfieldScale * (phf_data[row * phf->width + lcol] - phf_data[row * phf->width + rcol]) / 255.0f;
 			float y = heightfieldScale * (phf_data[trow * phf->width + col] - phf_data[brow * phf->width + col]) / 255.0f;
+			if (!y_flip) {
+				// Right, this is confusing, I admit it. The point here is that the y-flip is normally done by default
+				// by the code above. So if the DirectX style is needed, it's already done. This is for OpenGL style.
+				// TODOTODO verify!
+				y = -y;
+			}
 			float length = (float)sqrt(x * x + y * y + 1.0f);
 			// Basically, map from XYZ [-1,1] to RGB. Make sure it's normalized.
-			*src_data++ = (unsigned char)((1.0f + x / length) * 127.5f);
-			*src_data++ = (unsigned char)((1.0f + y / length) * 127.5f);
-			*src_data++ = (unsigned char)((1.0f + 1.0 / length) * 127.5f);
+			*dst_data++ = (unsigned char)(((x / length + 1.0f) / 2.0f) * 255.0f + 0.5f);
+			*dst_data++ = (unsigned char)(((y / length + 1.0f) / 2.0f) * 255.0f + 0.5f);
+			*dst_data++ = (unsigned char)(((1.0f / length + 1.0f) / 2.0f) * 255.0f + 0.5f);
 		}
 	}
-	return 1;
+}
+
+void cleanAndCopyNormalTexture(progimage_info* dst, progimage_info* src, bool must_clean, bool output_zzero, bool y_flip)
+{
+	int row, col;
+	float x, y, z;
+	unsigned char* src_data = &src->image_data[0];
+	unsigned char* dst_data = &dst->image_data[0];
+
+	for (row = 0; row < src->height; row++)
+	{
+		for (col = 0; col < src->width; col++)
+		{
+			// One thing we always do is compute the Z value and convert it properly to the blue channel,
+			// even if the data is clean. In this way we can entirely ignore the incoming Z channel and whether
+			// it's standard or Z-zero. All we care about is how to output it.
+			CONVERT_CHANNEL_TO_FULL(src_data[0], x);
+			CONVERT_CHANNEL_TO_FULL(src_data[1], y);
+
+			// Clean up x,y if needed, then finally convert back to r,g,b.
+			// Really, we could always do the code below as a sanity check, but I like to think this saves a few microseconds overall.
+			if (must_clean) {
+				// are X and Y invalid, forming a vector > 1.0 in length?
+				// TODOTODO check that this code gets hit.
+				float xy_len2 = x * x + y * y;
+				if (xy_len2 > 1.0f) {
+					// rescale x and y to fit (what else could we possibly do?) and set z - done!
+					float xy_length = sqrt(xy_len2);
+					x /= xy_length;
+					y /= xy_length;
+					// yes, the normal has to point sideways (what else could it be? The normal's too big), and we're done computing Z
+					z = 0.0f;
+				}
+				else {
+					// all's well with XY length, so compute Z from it
+					COMPUTE_Z_FROM_XY(x, y, z);
+				}
+			}
+			else {
+				// no cleaning, just compute Z
+				assert(x * x + y * y <= 1.0f);
+
+				COMPUTE_Z_FROM_XY(x, y, z);
+			}
+
+			// y-flip, if needed
+			if (y_flip) {
+				y = -y;
+			}
+
+			// and save; Z is guaranteed to not be negative because we computed it
+			if (output_zzero) {
+				// convert back to rgb
+				CONVERT_Z_ZERO_TO_RGB(x, y, z, dst_data[0], dst_data[1], dst_data[2]);
+			}
+			else {
+				// convert back to rgb
+				CONVERT_Z_FULL_TO_RGB(x, y, z, dst_data[0], dst_data[1], dst_data[2]);
+			}
+
+			// next texel
+			dst_data += 3;
+			src_data += 3;
+		}
+	}
 }
 
 

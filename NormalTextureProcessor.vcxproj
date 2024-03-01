@@ -131,6 +131,8 @@
     <ClCompile Include="lodepng.cpp" />
     <ClCompile Include="NormalTextureProcessor.cpp">
       <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</TreatWarningAsError>
+      <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</TreatWarningAsError>
     </ClCompile>
     <ClCompile Include="readtga.cpp" />
     <ClCompile Include="rwpng.cpp">
