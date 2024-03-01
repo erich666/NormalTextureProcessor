@@ -548,6 +548,7 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 	float min_z = 999.0f;
 	int zmaxabsdiff = 0;
 	int zmaxabsdiff_zero = 0;
+	float xymaxlength = 0.0f;
 	unsigned char first_pixel[3];
 	for (channel = 0; channel < 3; channel++) {
 		first_pixel[channel] = src_data[channel];
@@ -562,13 +563,13 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 			if (src_data[0] == first_pixel[0] && src_data[1] == first_pixel[1] && src_data[2] == first_pixel[2]) {
 				pixels_match++;
 			}
-			// does the channel match the first channel value?
+			// channel by channel, does the channel match the first channel value?
 			for (channel = 0; channel < 3; channel++) {
 				if (src_data[channel] == first_pixel[channel]) {
 					rgb_match[channel]++;
 				}
 			}
-			// are all three channels the same? (grayscale)
+			// are all three channel values the same? (grayscale)
 			if (src_data[0] == src_data[1] && src_data[1] == src_data[2]) {
 				grayscale++;
 			}
@@ -588,6 +589,9 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 
 			// find the proper z value
 			float xy_len = sqrt(x * x + y * y);
+			if (xymaxlength < xy_len) {
+				xymaxlength = xy_len;
+			}
 			// is x,y "short enough" to properly represent a normalized vector?
 			if (xy_len <= 1.0f + 2.0f * MAX_NORMAL_LENGTH_DIFFERENCE) {
 				// it's (mostly) short enough in X and Y.
@@ -743,14 +747,14 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 				must_clean = true;
 				if (image_field_bits & IMAGE_ALMOST_VALID_NORMALS_FULL) {
 					if (gOptions.analyze) {
-						std::wcout << "  The image does not have exactly the z-values expected, but these are within one of the expected value. " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent are as expected.\n";
+						std::wcout << "  The image does not have all exactly the z-values expected, but all Z's are within 1 of the expected value.\n  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent are as expected.\n";
 					}
 				}
 				else {
 					assert(image_field_bits & IMAGE_ALMOST2_VALID_NORMALS_FULL);
 					if (gOptions.analyze) {
-						std::wcout << "  The image does not have exactly the z-values expected, but these are within two of the expected value.\n";
-						std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent are as expected, " << 100.0f * (float)normal_length_zneg[1] / (float)image_size << " percent are just one away, and " << 100.0f * (float)normal_length_zneg[2] / (float)image_size << " percent are two away.\n";
+						std::wcout << "  The image does not have all exactly the z-values expected, but all Z's are within 2 of the expected value.\n";
+						std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent are as expected, " << 100.0f * (float)normal_length_zneg[1] / (float)image_size << " percent are just 1 away, and " << 100.0f * (float)normal_length_zneg[2] / (float)image_size << " percent are 2 away.\n";
 					}
 				}
 			}
@@ -816,6 +820,7 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 			if (gOptions.analyze) {
 				std::wcout << "Image file '" << inputFile << "' is probably a heightfield texture.\n";
 				std::wcout << "  The X and Y coordinates form vectors of about length 1.0 or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
+				std::wcout << "  The longest XY length vector found is " << xymaxlength << " (maximum possible is " << sqrt(2.0f) << ")\n";
 			}
 		}
 		else {
