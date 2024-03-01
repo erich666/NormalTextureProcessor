@@ -2,3 +2,4 @@ x64
 .vs
 NormalTextureProcessor.vcxproj.filters
 NormalTextureProcessor.vcxproj.user
+test_files/output_*

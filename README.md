@@ -4,7 +4,7 @@
 This C++ project examines normal textures (i.e., textures for applying bumps to surfaces), checking them for validity, and cleaning them up or converting them as desired.
 
 ## Installation
-Develop on Windows 10 on Visual Studio 2022. You might be able to compile it elsewhere, as it's ultimately command-line driven.
+Develop on Windows 10 on Visual Studio 2022 (double-click NormalTextureProcessor.sln, build Release version). You might be able to compile and run it elsewhere, as the program is purely command-line driven, no graphical user interface.
 
 ## Usage
 This system has a few major functions: analyze normal textures for what type and how good a normal texture they are, clean up textures that have problems, and convert from one normal texture type to another. Currently the system is limited to reading in 8-bit PNG and TGA (Targa) textures. I may add 16-bit PNG support at some point.
@@ -14,12 +14,17 @@ To list out all the command-line options, simply don't put any:
 NormalTextureProcessor.exe
 ```
 
+### Test Suite
+
+After building the Release version, you should be able to go into the **test_files** directory and double-click on **run_test_suite.bat**. As the README in that directory notes, running this test file will create various separate output directories where the results are put. You can look at **run_test_suite.bat** to see various options in use and look at the resulting files.
+
 ### Analysis
 
 This list will be confusing, so here are some typical combinations. To analyze all PNG and TGA textures in the current directory:
 ```sh
-NormalTextureProcessor.exe -a
+NormalTextureProcessor.exe -a -v
 ```
+The '-v' is optional. It means "verbose", giving you additional information during processing.
 
 A report is generated. At the end of the report the various files are output in separate categories, such as "pristine", "nearly right", etc. These lists can be used to copy and paste the list of files into the program itself, e.g.:
 ```sh
@@ -53,9 +58,18 @@ The third type of normal texture is a heightfield texture, often called a bump o
 
 ### Cleanup and Conversion
 
-In addition to analysis, this program (will - TBD) clean up and convert to different formats. Typical operations include:
-* Clean up the normals in a texture. Given a particular type of RGB texture, make sure the normals are all properly normalized and that no Z values are negative.
-* Convert between formats. OpenGL to DirectX, standard to Z-zero, or vice versa. Heightfields can be converted to RGB textures of any type, with an option of making them tiling or not (i.e., do the borders wrap or are they "doubled" or something else, such as maintaining slope?).
+In addition to analysis, this program cleans up and convert to different formats. Specify an output directory with '-odir _out_directory_name_'. The output file name will match the input file name, though always uses PNG for output. Be careful: if the input and output directories are the same or both are not specified (and so match), texture files will be written over in place.
+
+Typical operations include:
+* Clean up the normals in a texture. Use option '-oclean' to output only those files that need cleanup, '-oall' to output all files. Given a particular type of RGB texture, the program makes sure the normals are all properly normalized and that no Z values are negative.
+  * If you want to maintain the sign of the Z value, use the '-allownegz' option.
+* Convert between formats.
+  * OpenGL to DirectX, standard to Z-zero, or vice versa. OpenGl-style is the default, use '-idx' to note that the input files are DirectX-style (does not affect heightfields), '-odx' to set that you want to output in DirectX-style.
+  * To export to the Z-Zero format, where Z goes from 0 to 1 instead of -1 to 1, use '-ozzero'.
+* Heightfields can be converted to RGB textures of any type, using the options above.
+  * To force all input files to be treated as heightfields, use '-ihf'.
+  * To specify how the input heightfield data is scaled, use '-hfs #', where you give a scale factor. The value is 5.0 by default.
+  * By default heightfields are considered to repeat, meaning that along the edges heights "off the texture" are taken from the opposite edge. TBD: do the borders wrap or are they "doubled" or something else, such as maintaining slope. '-hborder'
 
 ## Algorithms
 
@@ -86,6 +100,10 @@ b = (unsigned char)(((z + 1.0f)/2.0f)*255.0f + 0.5f);
 
 See the code in the SCRATCHPAD section of NormalTextureProcessor.cpp for a roundtrip test and other procedures. Basically, rgb -> xyz -> rgb should give the same rgb's (this code does).
 
+## Known Limitations
+
+If you have two files with the same name, e.g., wood.tga and wood.png, both will be read in but only one output wood.png file (arbitrarily from one of the two input files) will be produced.
+
 ## Resources
 
 Some resources I've found useful:
@@ -95,11 +113,15 @@ Some resources I've found useful:
 * [glTF 2.0 specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html) - has much about normal textures.
 * [GIMP conversion](https://docs.gimp.org/en/gimp-filter-normal-map.html) - how to make normal textures from heightfields in GIMP.
 
+## License
+
+MIT license. See the [LICENSE](https://github.com/erich666/NormalTextureProcessor/blob/main/LICENSE) file in this directory.
+
 ## Roadmap
 
 Tasks:
 
-- [ ] Write out files, cleaning up and converting.
-- [ ] Figure out way (if any) to tell if a texture is OpenGL or DirectX oriented. I suspect there's some curvature analysis, perhaps converting into a heightfield, that could be done. Or maybe it's not possible.
-- [ ] Convert from normal textures to heightfields. Not sure this is useful (nor how to do it, exactly), but might be worth doing.
-- [ ] Support 16-bit PNG files.
+- [ ] Figure out way (if any) to tell if a texture is OpenGL or DirectX oriented. I suspect there's some curvature analysis, perhaps converting into a heightfield, that could be done. For example, take differences between texels horizontally and vertically and see the correspondence - bumps are more likely than hyperboloids. Or maybe it's not possible (well, it certainly isn't if there's no Y variance).
+- [ ] Convert from normal textures to heightfields. Not sure this is useful (nor how to do it, exactly), but might be worth adding, for visualization and analysis.
+- [ ] Ignore pixels with alpha values of 0.
+- [ ] Support 16-bit PNG files, input and output.

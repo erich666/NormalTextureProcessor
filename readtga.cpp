@@ -89,7 +89,6 @@ int readtga(progimage_info *im, wchar_t *filename, LodePNGColorType colortype)
     // it shouldn't.
     decoder.postProcessImage(header, image);
 
-    //im->image_data = TODOTODO - how to hold onto data? Use colortype for number of channels to write to
     if (match) {
         im->image_data = buffer;
     }
@@ -111,12 +110,11 @@ int readtga(progimage_info *im, wchar_t *filename, LodePNGColorType colortype)
             channels_out = (colortype == LCT_RGB) ? 3 : 1;
             break;
         }
-        std::vector<uint8_t> imbuffer(channels_out * header.width * header.height);
         int num_pixels = header.width * header.height;
-        im->image_data = imbuffer;
+        im->image_data.resize(channels_out * num_pixels);
         int i;
         unsigned char* src_data = &buffer[0];
-        unsigned char* dst_data = &imbuffer[0];
+        unsigned char* dst_data = &im->image_data[0];
         switch (channels_in) {
         case 1:
             // gray to RGB or RGBA
@@ -152,7 +150,7 @@ int readtga(progimage_info *im, wchar_t *filename, LodePNGColorType colortype)
             break;
         case 4:
             // RGBA to gray or RGB (ignore alpha, I guess...)
-            if (channels_out == 4) {
+            if (channels_out == 3) {
                 for (i = 0; i < num_pixels; i++) {
                     *dst_data++ = *src_data++;
                     *dst_data++ = *src_data++;
