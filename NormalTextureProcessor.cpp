@@ -1018,7 +1018,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 			image_type = IMAGE_TYPE_HEIGHTFIELD;
 			if (gOptions.analyze) {
 				std::wcout << "Image file '" << inputFile << "' is probably a heightfield texture.\n";
-				std::wcout << "  The X and Y coordinates form vectors of about length 1.0 or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
+				std::wcout << "  The X and Y coordinates form vectors of length 1.0+epsilon or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
 				std::wcout << "  " << xy_outside_bounds << " texels total are greater than length 1.0 + epsilon " << 2.0f * MAX_NORMAL_LENGTH_DIFFERENCE << "\n";
 				std::wcout << "  The longest XY length vector found is " << xymaxlength << " (maximum possible is " << sqrt(2.0f) << ")\n";
 			}
@@ -1036,7 +1036,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 					image_type = IMAGE_TYPE_NORMAL_XY_ONLY;
 					if (gOptions.analyze) {
 						std::wcout << "Image file '" << inputFile << "' is probably an XY-only normals texture,\n";
-						std::wcout << "  with the X and Y coordinates forming vectors of about length 1.0 or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
+						std::wcout << "  with the X and Y coordinates forming vectors of length 1.0+epsilon or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
 						std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texel Z values are more than 2 levels from being properly normalized.\n";
 						std::wcout << "  The z value was found to be as far off as " << zmaxabsdiff << " levels in expected value,\n  and was greater than a difference of 2 levels for " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texels.\n";
 					}
@@ -1047,7 +1047,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 					if (image_field_bits & IMAGE_VALID_ZVAL_NONNEG) {
 						if (gOptions.analyze) {
 							std::wcout << "Image file '" << inputFile << "' may be a normals texture,\n";
-							std::wcout << "  with the X and Y coordinates forming vectors of about length 1.0 or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
+							std::wcout << "  with the X and Y coordinates forming vectors of length 1.0+epsilon or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
 							std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texel Z values are more than 2 levels from being properly normalized.\n";
 							std::wcout << "  The z value was found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
 						}
@@ -1055,7 +1055,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 					else {
 						if (gOptions.analyze) {
 							std::wcout << "Image file '" << inputFile << "' might be a normals texture,\n";
-							std::wcout << "  with the X and Y coordinates forming vectors of about length 1.0 or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
+							std::wcout << "  with the X and Y coordinates forming vectors of length 1.0+epsilon or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
 							std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texel Z values are more than 2 levels from being properly normalized.\n";
 							std::wcout << "  The z value was found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
 							std::wcout << "  The most negative Z value found was " << min_z << "\n";
@@ -1071,7 +1071,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 					image_type = IMAGE_TYPE_NORMAL_XY_ONLY;
 					if (gOptions.analyze) {
 						std::wcout << "Image file '" << inputFile << "' is probably an XY-only normals texture,\n";
-						std::wcout << "  with the X and Y coordinates forming vectors of about length 1.0 or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
+						std::wcout << "  with the X and Y coordinates forming vectors of length 1.0+epsilon or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
 						std::wcout << "  " << 100.0f * (float)z_outside_zzero_bounds / (float)image_size << " percent of the texel Z values are more than two from being properly normalized.\n";
 						std::wcout << "  The z value (assuming range 0 to 1) was found to be as far off as " << zmaxabsdiff_zero << " levels in expected value.\n";
 					}
@@ -1080,7 +1080,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 					image_type = IMAGE_TYPE_NORMAL_ZERO;
 					if (gOptions.analyze) {
 						std::wcout << "Image file '" << inputFile << "' may be a normals texture with Z ranging from 0.0 to 1.0,\n";
-						std::wcout << "  with the X and Y coordinates forming vectors of about length 1.0 or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
+						std::wcout << "  with the X and Y coordinates forming vectors of length 1.0+epsilon or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
 						std::wcout << "  " << 100.0f * (float)z_outside_zzero_bounds / (float)image_size << " percent of the texel Z values are more than two from being properly normalized.\n";
 						std::wcout << "  The z value (assuming range 0 to 1) was found to be as far off as " << zmaxabsdiff_zero << " levels in expected value.\n";
 					}
