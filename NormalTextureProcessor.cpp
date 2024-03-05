@@ -1,7 +1,8 @@
 // NormalTextureProcessor.cpp : This file contains the 'main' function. Program execution begins and ends there.
-// Program to read in normal textures and analyze or clean up/convert them to other normal texture forms.
+// Program to read in normals textures and analyze or clean up/convert them to other normals texture forms.
 
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <assert.h>
 #include <windows.h>
@@ -133,10 +134,15 @@ struct Options {
 	std::wstring outputDirectory;
 	bool outputZzeroToOne;
 	bool outputDirectX;
+	bool outputHeatmap;
 	bool allowNegativeZ;
 	float heightfieldScale;
 	bool borderHeightfield;
 	bool verbose;
+	bool csvAll;
+	bool csvErrors;
+	float errorPercent;
+	//bool roundtrip;
 };
 
 Options gOptions;
@@ -158,14 +164,14 @@ std::wstring gListAllSame;
 //-------------------------------------------------------------------------
 void printHelp();
 
-static void filterAndProcessImageFile(wchar_t* inputFile);
-static bool processImageFile(wchar_t* inputFile, int fileType);
+int filterAndProcessImageFile(wchar_t* inputFile);
+bool processImageFile(wchar_t* inputFile, int fileType);
 
-static void reportReadError(int rc, const wchar_t* filename);
-static void saveErrorForEnd();
+void reportReadError(int rc, const wchar_t* filename);
+void saveErrorForEnd();
 
-void convertHeightfieldToXYZ(progimage_info* dst, progimage_info* src, float heightfieldScale, bool y_flip);
-void cleanAndCopyNormalTexture(progimage_info* dst, progimage_info* src, int image_type, bool must_clean, bool output_zzero, bool y_flip);
+void convertHeightfieldToXYZ(progimage_info* dst, progimage_info* src, float heightfieldScale, bool y_flip, bool clamp_border);
+void cleanAndCopyNormalTexture(progimage_info* dst, progimage_info* src, int image_type, bool output_zzero, bool y_flip, bool heatmap);
 
 bool removeFileType(wchar_t* name);
 int isImageFile(wchar_t* name);
@@ -174,7 +180,7 @@ bool createDir(const wchar_t* path);
 
 int wmain(int argc, wchar_t* argv[])
 {
-	// TODOTODO experiment: try all possible X and Y values in a quadrant, compute Z. How close is the triplet formed to 1.0 length?
+	// experiment: try all possible X and Y values in a quadrant, compute Z. How close is the triplet formed to 1.0 length?
 
 	// Result: Average diff from length of 1.0f: 0.00129662, maximum length difference detected is 0.00386751 and
 	//   maximum z difference detected is 0.00391376 for the 51040 valid pixel values
@@ -222,7 +228,7 @@ int wmain(int argc, wchar_t* argv[])
 				// this passes with flying colors
 				assert(r == r1 && g == g1 && b == b1);
 				if (r != r1 || g != g1 || b != b1) {
-					std::cerr << "ERROR: something weird's going on, the round trip test failed.\n" << std::flush;
+					std::wcerr << "ERROR: something weird's going on, the round trip test failed.\n" << std::flush;
 				}
 			}
 		}
@@ -242,10 +248,15 @@ int wmain(int argc, wchar_t* argv[])
 	gOptions.outputClean = false;
 	gOptions.outputZzeroToOne = false;
 	gOptions.outputDirectX = false;
+	gOptions.outputHeatmap = false;
 	gOptions.allowNegativeZ = false;
 	gOptions.heightfieldScale = 5.0f;
 	gOptions.borderHeightfield = false;
 	gOptions.verbose = false;
+	gOptions.csvAll = false;
+	gOptions.csvErrors = false;
+	gOptions.errorPercent = 0.02f;
+	//gOptions.roundtrip = false;
 
 	std::vector<std::wstring> fileList;
 
@@ -277,7 +288,7 @@ int wmain(int argc, wchar_t* argv[])
 		{
 			gOptions.inputDirectX = true;
 		}
-		else if (wcscmp(argv[argLoc], L"-ihf") == 0)
+		else if (wcscmp(argv[argLoc], L"-inputHeightfield") == 0)
 		{
 			gOptions.inputHeightfield = true;
 		}
@@ -303,6 +314,10 @@ int wmain(int argc, wchar_t* argv[])
 		{
 			gOptions.outputDirectX = true;
 		}
+		else if (wcscmp(argv[argLoc], L"-oheatmap") == 0)
+		{
+			gOptions.outputHeatmap = true;
+		}
 		else if (wcscmp(argv[argLoc], L"-allownegz") == 0)
 		{
 			gOptions.allowNegativeZ = true;
@@ -315,8 +330,30 @@ int wmain(int argc, wchar_t* argv[])
 		}
 		else if (wcscmp(argv[argLoc], L"-hborder") == 0)
 		{
-			// TODO; and should there be a "continue slope" option for the border, too?
+			// TODO: should there also be a "continue slope" option for the border, too?
+			// Basically, if on the border, take the difference and double it (since we'll be using the texel itself for one offset).
 			gOptions.borderHeightfield = true;
+		}
+		else if (wcscmp(argv[argLoc], L"-csv") == 0)
+		{
+			gOptions.csvAll = true;
+		}
+		else if (wcscmp(argv[argLoc], L"-csve") == 0)
+		{
+			gOptions.csvErrors = true;
+		}
+		else if (wcscmp(argv[argLoc], L"-etol") == 0)
+		{
+			// heightfield scale float value
+			INC_AND_TEST_ARG_INDEX(argLoc);
+			swscanf_s(argv[argLoc], L"%f", &gOptions.errorPercent);
+			if (gOptions.errorPercent < 0.0f || gOptions.errorPercent > 100.0f) {
+				std::wcerr << "ERROR: error tolerance percentage must be between 0 and 100.\n";
+				printHelp();
+				return 1;
+			}
+			// turn percent tolerance into 0-1 range value
+			gOptions.errorPercent *= 0.01f;
 		}
 		else if (wcscmp(argv[argLoc], L"-v") == 0)
 		{
@@ -336,26 +373,37 @@ int wmain(int argc, wchar_t* argv[])
 	}
 
 	if (gOptions.verbose) {
-		std::wcout << "NormalTextureProcessor version " << VERSION_STRING << "\n" << std::flush;
+		std::wcout << "NormalTextureProcessor version " << VERSION_STRING << "\n\n" << std::flush;
 	}
 
 	// check validity of options only if we're actually outputing
 	if (!(gOptions.outputAll || gOptions.outputClean)) {
 		// No output mode chosen, so these options won't do anything
 		if (gOptions.inputHeightfield || gOptions.inputDirectX || gOptions.borderHeightfield || gOptions.outputDirectory.size() > 0 ||
-				gOptions.outputDirectX || gOptions.outputZzeroToOne) {
+				gOptions.outputDirectX || gOptions.outputZzeroToOne || gOptions.outputHeatmap) {
 			std::wcerr << "WARNING: options associated with output are set, but -oall or -oclean not set. One of these two must be chosen.\n" << std::flush;
 		}
 	}
 
 	if (gOptions.inputHeightfield && gOptions.inputDirectX) {
 		std::wcerr << "WARNING: -ihf says to assume input is a heightfield, but -idx says it's DirectX style; latter option is ignored.\n" << std::flush;
+		gOptions.inputDirectX = false;
 	}
+
+	if ((gOptions.inputZzeroToOne ? 1 : 0) + (gOptions.inputZnegOneToOne ? 1 : 0) + (gOptions.inputXYonly ? 1 : 0) + (gOptions.inputHeightfield ? 1 : 0) > 1) {
+		std::wcerr << "ERROR: more than one input specifier of [-izneg | -izzero | -ixy | -ihf] is given; choose at most one.\n" << std::flush;
+		printHelp();
+		return 1;
+ 	}
 
 	if (gOptions.inputHeightfield && gOptions.inputXYonly) {
 		std::wcerr << "ERROR: input specifiers -ihf and -xy cannot both be set.\n" << std::flush;
 		printHelp();
 		return 1;
+	}
+
+	if ((gOptions.csvAll || gOptions.csvErrors) && ((gOptions.inputZzeroToOne ? 1 : 0) + (gOptions.inputZnegOneToOne ? 1 : 0) + (gOptions.inputXYonly ? 1 : 0) != 1)) {
+		std::wcerr << "ERROR: for CSV output you must specify the input type [-izneg | -izzero | -ixy].\n" << std::flush;
 	}
 
 	int pos;
@@ -404,9 +452,17 @@ int wmain(int argc, wchar_t* argv[])
 
 	// files to search on. We'll later filter by .png and .tga
 	if (fileList.size() > 0) {
+		bool bad_file = false;
 		for (int i = 0; i < fileList.size(); i++) {
 			wcscpy_s(fileSearch, MAX_PATH, fileList[i].c_str());
-			filterAndProcessImageFile(fileSearch);
+			if (filterAndProcessImageFile(fileSearch) == UNKNOWN_FILE_EXTENSION) {
+				// file not an image file - note error
+				std::wcerr << "Error: file '" << fileSearch << "' is not an image file.\n";
+				bad_file = true;
+			}
+		}
+		if (bad_file) {
+			printHelp();
 		}
 	}
 	else {
@@ -442,27 +498,27 @@ int wmain(int argc, wchar_t* argv[])
 		bool output_any = false;
 		if (gListStandardSame.size() > 0) {
 			output_any = true;
-			std::wcout << "  Standard normal textures that have no bumps, all texels are the same value:" << gListStandardSame << "\n";
+			std::wcout << "  Standard normals textures that have no bumps, all texels are the same value:" << gListStandardSame << "\n";
 		}
 		if (gListStandard.size() > 0) {
 			output_any = true;
-			std::wcout << "  Standard normal textures:" << gListStandard << "\n";
+			std::wcout << "  Standard normals textures:" << gListStandard << "\n";
 			if (gListStandardDirty.size() > 0) {
 				output_any = true;
-				std::wcout << "    Standard normal textures that are not as expected:" << gListStandardDirty << "\n";
+				std::wcout << "    Standard normals textures that are not perfectly normalized:" << gListStandardDirty << "\n";
 			}
 		}
 		if (gListZZero.size() > 0) {
 			output_any = true;
-			std::wcout << "  Z-Zero normal textures:" << gListZZero << "\n";
+			std::wcout << "  Z-Zero normals textures:" << gListZZero << "\n";
 			if (gListZZeroDirty.size() > 0) {
 				output_any = true;
-				std::wcout << "    Z-Zero normal textures that are not as expected:" << gListZZeroDirty << "\n";
+				std::wcout << "    Z-Zero normals textures that are not perfectly normalized:" << gListZZeroDirty << "\n";
 			}
 		}
 		if (gListXYonly.size() > 0) {
 			output_any = true;
-			std::wcout << "  XY-only normal textures:" << gListXYonly << "\n";
+			std::wcout << "  XY-only normals textures:" << gListXYonly << "\n";
 		}
 		if (gListHeightfield.size() > 0) {
 			output_any = true;
@@ -477,7 +533,12 @@ int wmain(int argc, wchar_t* argv[])
 			std::wcout << "  Textures with no bumps:" << gListAllSame << "\n";
 		}
 		if (!output_any) {
-			std::wcout << "  (No PNG or TGA files found to analyze)\n";
+			if (gOptions.inputDirectory.size() > 0) {
+				std::wcout << "  No PNG or TGA files found to analyze in directory '" << gOptions.inputDirectory << "'\n";
+			}
+			else {
+				std::wcout << "  No PNG or TGA files found to analyze in current directory\n";
+			}
 		}
 	}
 
@@ -485,23 +546,25 @@ int wmain(int argc, wchar_t* argv[])
 	return 0;
 }
 
-static void filterAndProcessImageFile(wchar_t* inputFile)
+int filterAndProcessImageFile(wchar_t* inputFile)
 {
-	int fileType = isImageFile(inputFile);
-	if (fileType != UNKNOWN_FILE_EXTENSION) {
+	int file_type = isImageFile(inputFile);
+	if (file_type != UNKNOWN_FILE_EXTENSION) {
 		// Seems to be an image file. Can we process it?
-		if (fileType == PNG_EXTENSION_FOUND || fileType == TGA_EXTENSION_FOUND) {
+		if (file_type == PNG_EXTENSION_FOUND || file_type == TGA_EXTENSION_FOUND) {
 			gFilesFound++;
-			gFilesOutput += (processImageFile(inputFile, fileType) ? 1 : 0);
+			gFilesOutput += (processImageFile(inputFile, file_type) ? 1 : 0);
+			return file_type;
 		}
 		else {
 			std::wcerr << "WARNING: file " << inputFile << " is not an image file type currently supported in this program. Convert to PNG or TGA to process it.\n" << std::flush;
 		}
 	}
+	return UNKNOWN_FILE_EXTENSION;
 }
 
 // return true if successfully read in and output
-static bool processImageFile(wchar_t* inputFile, int fileType)
+bool processImageFile(wchar_t* inputFile, int file_type)
 {
 	bool rc_output = false;
 	wchar_t inputPathAndFile[MAX_PATH];
@@ -511,7 +574,7 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 
 	// read input file
 	progimage_info imageInfo;
-	int rc = readImage(&imageInfo, inputPathAndFile, LCT_RGB, fileType);
+	int rc = readImage(&imageInfo, inputPathAndFile, LCT_RGB, file_type);
 	if (rc != 0)
 	{
 		// file not found
@@ -529,7 +592,8 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 
 	int row, col, channel;
 	int image_field_bits = 0x0;
-	float x, y, z, zcalc;
+	float x, y, z, zzero, zcalc;
+	x = 0; y = 0; z = 0; zzero = 0;	// initialized mostly to make the compiler happy; these do get used in some analysis messages.
 	unsigned char* src_data = &imageInfo.image_data[0];
 	// various counters
 	int pixels_match = 0;
@@ -539,7 +603,7 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 	normalizable_xy[0] = normalizable_xy[1] = normalizable_xy[2] = 0;
 	int xy_outside_bounds = 0;
 	int z_outside_bounds = 0;
-	int z_outside_zero_bounds = 0;
+	int z_outside_zzero_bounds = 0;
 	int normal_length_zneg[3];
 	normal_length_zneg[0] = normal_length_zneg[1] = normal_length_zneg[2] = 0;
 	int normal_zval_nonnegative = 0;
@@ -549,12 +613,61 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 	int zmaxabsdiff = 0;
 	int zmaxabsdiff_zero = 0;
 	float xymaxlength = 0.0f;
+	float maxnormallength = 0.0f;
+	float minnormallength = 2.0f;
+	float zzero_maxnormallength = 0.0f;
+	float zzero_minnormallength = 2.0f;
+	double xsum, ysum, zsum, zzerosum;
+	xsum = ysum = zsum = zzerosum = 0.0;
 	unsigned char first_pixel[3];
 	for (channel = 0; channel < 3; channel++) {
 		first_pixel[channel] = src_data[channel];
 		rgb_match[channel] = 0;
 	}
 	int image_size = imageInfo.width * imageInfo.height;
+
+	if (image_size <= 0) {
+		std::wcerr << "WARNING: file '" << inputFile << "' has no data so is not processed further.\n";
+		return true;
+	}
+
+	// if CSV desired, open file
+	std::wfstream csvOutput;
+	if (gOptions.csvAll || gOptions.csvErrors) {
+		wchar_t csvOutputPathAndFile[MAX_PATH];
+		// note that outputDirectory already has a "/" at the end, due to manipulation at the start of the program
+		wcscpy_s(csvOutputPathAndFile, MAX_PATH, gOptions.outputDirectory.c_str());
+
+		// We always use PNG as output, so change the .TGA suffix if necouted be.
+		wchar_t csvFileName[MAX_PATH];
+		wcscpy_s(csvFileName, MAX_PATH, inputFile);
+		// change suffix to CSV
+		size_t csv_suffix_pos = wcslen(csvFileName) - 4;
+		csvFileName[csv_suffix_pos] = 0;
+		wcscat_s(csvFileName, MAX_PATH, L".csv");
+
+		// add the file name to the output directory
+		wcscat_s(csvOutputPathAndFile, MAX_PATH, csvFileName);
+		csvOutput.open(csvOutputPathAndFile, std::fstream::out);
+
+		if (csvOutput.fail()) {
+			std::wcerr << "ERROR: could not open file '" << csvOutputPathAndFile << "' for writing, failbit " << csvOutput.fail() << ".\n";
+			return false;
+		}
+
+		if (gOptions.verbose) {
+			std::wcout << "New CSV file '" << csvOutputPathAndFile << "' created.\n\n" << std::flush;
+		}
+		csvOutput << "Column, Row, r, g, b, X, Y, Z, Z-zero, XY length, XYZ length, XYZ-zero length, XY > 1, Z < 0, " <<
+			(!gOptions.inputZzeroToOne ? "XYZ != 1\n" : "XYZ - zero != 1\n");
+	}
+
+	// note these are reset each iteration only when writing to a CSV file, as these are used only for CSV output
+	char err_outside_xy = ' ';
+	char err_z_neg_is_negative = ' ';
+	char err_outside_z = ' ';
+	char err_outside_z_zero = ' ';
+
 	for (row = 0; row < imageInfo.height; row++)
 	{
 		for (col = 0; col < imageInfo.width; col++)
@@ -576,15 +689,43 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 
 			// Try conversion to XYZ's. Which if any make sense?
 			CONVERT_RGB_TO_Z_FULL(src_data[0], src_data[1], src_data[2], x, y, z);
+			CONVERT_CHANNEL_TO_ZERO(src_data[2], zzero);
+			xsum += x;
+			ysum += y;
+			zsum += z;
+			zzerosum += zzero;
+
+			// compute normal's length from values and compare
+			float normal_length = VECTOR_LENGTH(x, y, z);
+			if (maxnormallength < normal_length) {
+				maxnormallength = normal_length;
+			}
+			if (minnormallength > normal_length) {
+				minnormallength = normal_length;
+			}
 
 			// Check if the range of z values is non-negative. It may just be the normals are not normalized?
 			if (z > -MAX_NORMAL_LENGTH_DIFFERENCE) {
 				normal_zval_nonnegative++;
+				if (z < 0.0f) {
+					err_z_neg_is_negative = '1';
+				}
+			}
+			else {
+				err_z_neg_is_negative = 'X';
 			}
 
 			// lowest z value found (for -1 to 1 conversion)
 			if (min_z > z) {
 				min_z = z;
+			}
+
+			float zzero_normal_length = VECTOR_LENGTH(x, y, zzero);
+			if (zzero_maxnormallength < zzero_normal_length) {
+				zzero_maxnormallength = zzero_normal_length;
+			}
+			if (zzero_minnormallength > zzero_normal_length) {
+				zzero_minnormallength = zzero_normal_length;
 			}
 
 			// find the proper z value
@@ -598,6 +739,7 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 
 				// determine what z really should be for this x,y pair
 				if (xy_len <= 1.0f) {
+					// xy_len is definitely valid
 					normalizable_xy[0]++;
 					COMPUTE_Z_FROM_XY(x, y, zcalc);
 				}
@@ -606,13 +748,17 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 					// Set z to 0.0
 					zcalc = 0.0f;
 					if (xy_len <= 1.0f + MAX_NORMAL_LENGTH_DIFFERENCE) {
+						// it's one texel level difference
 						normalizable_xy[1]++;
+						err_outside_xy = '1';
 					}
 					else {
+						// it's a two-texel level difference
 						normalizable_xy[2]++;
+						err_outside_xy = '2';
 					}
 				}
-				// is the z converted pixel level off by only one?
+				// is the correctly z converted pixel level off by only one, compared to the original blue channel value?
 				unsigned char bcalc;
 				CONVERT_FULL_TO_CHANNEL(zcalc, bcalc);
 				int zabsdiff = (int)(abs(src_data[2] - bcalc));
@@ -621,12 +767,16 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 				}
 				if (zabsdiff == 1) {
 					normal_length_zneg[1]++;
+					err_outside_z = '1';
 				}
 				if (zabsdiff == 2) {
 					normal_length_zneg[2]++;
+					err_outside_z = '2';
 				}
 				if (zabsdiff > 2) {
+					// computed z is considerably different from input z
 					z_outside_bounds++;
+					err_outside_z = 'X';
 				}
 				if (zmaxabsdiff < zabsdiff) {
 					zmaxabsdiff = zabsdiff;
@@ -640,12 +790,15 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 				}
 				if (zabsdiff == 1) {
 					normal_length_zzero[1]++;
+					err_outside_z_zero = '1';
 				}
 				if (zabsdiff == 2) {
 					normal_length_zzero[2]++;
+					err_outside_z_zero = '2';
 				}
 				if (zabsdiff > 2) {
-					z_outside_zero_bounds++;
+					z_outside_zzero_bounds++;
+					err_outside_z_zero = 'X';
 				}
 				if (zmaxabsdiff_zero < zabsdiff) {
 					zmaxabsdiff_zero = zabsdiff;
@@ -653,11 +806,26 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 			}
 			else {
 				xy_outside_bounds++;	// just a place to put a break and see what's what
+				err_outside_xy = 'X';
+			}
+			if (gOptions.csvAll ||
+				(gOptions.csvErrors && (err_z_neg_is_negative != ' ' || (!gOptions.inputZzeroToOne && (err_outside_z != ' ')) || (!gOptions.inputZnegOneToOne && (err_outside_z_zero != ' ')) || err_outside_xy != ' '))) {
+				//csvOutput << "Column, Row, r, g, b, X, Y, Z, Z-zero, XY length, XYZ length, XYZ-zero length, XY > 1, Z < 0, XYZ != 1, XYZ-zero != 1\n";
+				csvOutput << col << ", " << row << ", " << src_data[0] << ", " << src_data[1] << ", " << src_data[2] << ", "
+					<< x << ", " << y << ", " << z << ", " << zzero << ", " << xy_len << ", " << normal_length << ", " << zzero_normal_length << ", "
+					<< err_outside_xy << ", " << err_z_neg_is_negative << ", " << (!gOptions.inputZzeroToOne ? err_outside_z : err_outside_z_zero) << "\n";
+				err_outside_xy = ' ';
+				err_z_neg_is_negative = ' ';
+				err_outside_z = ' ';
+				err_outside_z_zero = ' ';
 			}
 
 			// next texel
 			src_data += 3;
 		}
+	}
+	if (gOptions.csvAll || gOptions.csvErrors) {
+		csvOutput.close();
 	}
 
 	// At this point we can do some analysis and see what sort of normal map we have
@@ -707,23 +875,23 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 
 	int image_type = 0;
 	int must_clean = false;
-	// What sort of normal texture is this?
+	// What sort of normals texture is this?
 	if (gOptions.inputZnegOneToOne) {
 		image_type = IMAGE_TYPE_NORMAL_FULL;
 		if (gOptions.analyze) {
-			std::wcout << "Image file '" << inputFile << "' forced to be a standard normal texture. No analysis performed.\n";
+			std::wcout << "Image file '" << inputFile << "' forced to be a standard normals texture. No analysis performed.\n";
 		}
 	}
 	else if (gOptions.inputZzeroToOne) {
 		image_type = IMAGE_TYPE_NORMAL_ZERO;
 		if (gOptions.analyze) {
-			std::wcout << "Image file '" << inputFile << "' forced to be a Z-zero normal texture. No analysis performed.\n";
+			std::wcout << "Image file '" << inputFile << "' forced to be a Z-zero normals texture. No analysis performed.\n";
 		}
 	}
 	else if (gOptions.inputXYonly) {
 		image_type = IMAGE_TYPE_NORMAL_XY_ONLY;
 		if (gOptions.analyze) {
-			std::wcout << "Image file '" << inputFile << "' forced to be a normal texture with only X and Y input. No analysis performed.\n";
+			std::wcout << "Image file '" << inputFile << "' forced to be a normals texture with only X and Y input. No analysis performed.\n";
 		}
 	}
 	else if (gOptions.inputHeightfield) {
@@ -736,34 +904,39 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 		image_type = IMAGE_TYPE_NORMAL_FULL;
 		if (image_field_bits & IMAGE_ALL_SAME) {
 			if (gOptions.analyze) {
-				std::wcout << "Image file '" << inputFile << "' is a normal texture, but all values are the same (normals do not vary).\n";
+				std::wcout << "Image file '" << inputFile << "' is a normals texture, but all values are the same (normals do not vary).\n  r = " << first_pixel[0] << ", g = " << first_pixel[1] << ", b = " << first_pixel[2] << "; X = " << x << ", Y = " << y << ", Z = " << z << "\n";
 			}
 		}
 		else {
 			if (gOptions.analyze) {
-				std::wcout << "Image file '" << inputFile << "' is a normal texture.\n";
+				std::wcout << "Image file '" << inputFile << "' is a normals texture.\n";
 			}
 			if (!(image_field_bits & IMAGE_VALID_NORMALS_FULL)) {
 				must_clean = true;
 				if (image_field_bits & IMAGE_ALMOST_VALID_NORMALS_FULL) {
 					if (gOptions.analyze) {
-						std::wcout << "  The image does not have all exactly the z-values expected, but all Z's are within 1 of the expected value.\n  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent are as expected.\n";
+						std::wcout << "  The texture does not have all perfect z-values, but all Z's are within 1 level of the expected value.\n  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent are perfectly normalized.\n";
 					}
 				}
 				else {
 					assert(image_field_bits & IMAGE_ALMOST2_VALID_NORMALS_FULL);
 					if (gOptions.analyze) {
-						std::wcout << "  The image does not have all exactly the z-values expected, but all Z's are within 2 of the expected value.\n";
-						std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent are as expected, " << 100.0f * (float)normal_length_zneg[1] / (float)image_size << " percent are just 1 away, and " << 100.0f * (float)normal_length_zneg[2] / (float)image_size << " percent are 2 away.\n";
+						std::wcout << "  The texture does not have all perfect z-values, but all Z's are within 2 levels of the expected value.\n";
+						std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent are perfectly normalized, " << 100.0f * (float)normal_length_zneg[1] / (float)image_size << " percent are just 1 away, and " << 100.0f * (float)normal_length_zneg[2] / (float)image_size << " percent are 2 away.\n";
 					}
 				}
 			}
-		}
-		// mostly a reality check - should be caught by the NORMALS_FULL testing.
-		if (!gOptions.allowNegativeZ && !(image_field_bits & IMAGE_VALID_ZVAL_NONNEG)) {
 			if (gOptions.analyze) {
-				std::wcout << "  But, some Z values were found to be negative. " << 100.0f * (float)normal_zval_nonnegative / (float)image_size << " percent were not negative. The most negative Z value found was " << min_z << "\n";
+				std::wcout << "  Normal lengths found in original data, assuming Z -1 to 1: minimum " << minnormallength << " and maximum " << maxnormallength << "\n";
 			}
+			if (!gOptions.allowNegativeZ && !(image_field_bits & IMAGE_VALID_ZVAL_NONNEG)) {
+				if (gOptions.analyze) {
+					std::wcout << "  But, some Z values were found to be negative. " << 100.0f * (float)normal_zval_nonnegative / (float)image_size << " percent were not negative. The most negative Z value found was " << min_z << "\n";
+				}
+			}
+		}
+		if (gOptions.analyze) {
+			std::wcout << "  average XYZ values, assuming Z -1 to 1: X " << (float)(xsum/(double)image_size) << ", Y " << (float)(ysum / (double)image_size) << ", Z " << (float)(zsum / (double)image_size) << "\n";
 		}
 	}
 	else if ((image_field_bits & IMAGE_ALMOST2_VALID_NORMALS_ZERO) && (image_field_bits & IMAGE_ALMOST2_VALID_NORMALS_XY)) {
@@ -771,107 +944,144 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 		if (image_field_bits & IMAGE_ALL_SAME) {
 			// really, we should never reach here - the similar code above should flag first.
 			if (gOptions.analyze) {
-				std::wcout << "Image file '" << inputFile << "' is a normal texture with Z ranging from 0.0 to 1.0, but all values are the same (normals do not vary).\n";
+				std::wcout << "Image file '" << inputFile << "' is a normals texture with Z ranging from 0.0 to 1.0, but all values are the same (normals do not vary).\n  r = " << first_pixel[0] << ", g = " << first_pixel[1] << ", b = " << first_pixel[2] << "; X = " << x << ", Y = " << y << ", Z - zero = " << zzero << "\n";
 			}
 			assert(0);
 		}
 		else {
 			if (gOptions.analyze) {
-				std::wcout << "Image file '" << inputFile << "' is a normal texture with Z ranging from 0.0 to 1.0.\n";
+				std::wcout << "Image file '" << inputFile << "' is a normals texture with Z ranging from 0.0 to 1.0.\n";
 			}
 			if (!(image_field_bits & IMAGE_VALID_NORMALS_ZERO)) {
 				must_clean = true;
 				if (image_field_bits & IMAGE_ALMOST_VALID_NORMALS_ZERO) {
 					if (gOptions.analyze) {
-						std::wcout << "  The image does not have exactly the z-values expected, but these are within one of the expected value.\n  " << 100.0f * (float)normal_length_zzero[0] / (float)image_size << " percent are precise as expected.\n";
+						std::wcout << "  The texture does not have all perfect z-values, but these are within 1 level of the expected value.\n  " << 100.0f * (float)normal_length_zzero[0] / (float)image_size << " percent are precise perfectly normalized.\n";
 					}
 				}
 				else {
 					assert(image_field_bits & IMAGE_ALMOST2_VALID_NORMALS_ZERO);
 					if (gOptions.analyze) {
-						std::wcout << "  The image does not have exactly the z-values expected, but these are within two of the expected value.\n";
-						std::wcout << "  " << 100.0f * (float)normal_length_zzero[0] / (float)image_size << " percent are as expected, " << 100.0f * (float)normal_length_zzero[1] / (float)image_size << " percent are just one away, and " << 100.0f * (float)normal_length_zzero[2] / (float)image_size << " percent are two away.\n";
+						std::wcout << "  The texture does not have does not have all perfect z-values, but these are within two of the expected value.\n";
+						std::wcout << "  " << 100.0f * (float)normal_length_zzero[0] / (float)image_size << " percent are perfectly normalized, " << 100.0f * (float)normal_length_zzero[1] / (float)image_size << " percent are just 1 level away, and " << 100.0f * (float)normal_length_zzero[2] / (float)image_size << " percent are two away.\n";
 					}
 				}
 			}
+			if (gOptions.analyze) {
+				std::wcout << "  Normal lengths found in original data, assuming Z 0 to 1: minimum " << zzero_minnormallength << " and maximum " << zzero_maxnormallength << "\n";
+			}
+		}
+		if (gOptions.analyze) {
+			std::wcout << "  average XYZ values, assuming Z 0 to 1: X " << (float)(xsum / (double)image_size) << ", Y " << (float)(ysum / (double)image_size) << ", Z " << (float)(zzerosum / (double)image_size) << "\n";
 		}
 	}
 	else if (image_field_bits & IMAGE_GRAYSCALE) {
 		image_type = IMAGE_TYPE_HEIGHTFIELD;
 		if (image_field_bits & IMAGE_ALL_SAME) {
 			if (gOptions.analyze) {
-				std::wcout << "Image file '" << inputFile << "' is likely a heightfield (grayscale) texture,\n  but all values are the same (normals do not vary).\n";
+				std::wcout << "Image file '" << inputFile << "' is a heightfield (grayscale) texture,\n  but all values are the same (heights do not vary).\n  r = " << first_pixel[0] << ", g = " << first_pixel[1] << ", b = " << first_pixel[2] << "\n";
 			}
 		}
 		else {
 			if (gOptions.analyze) {
-				std::wcout << "Image file '" << inputFile << "' is likely a heightfield (grayscale) texture.\n";
+				std::wcout << "Image file '" << inputFile << "' is a heightfield (grayscale) texture.\n";
 			}
 		}
 	}
 	else {
 		// We're really not sure at this point. Try some "close enough" tests. Could get more refined here, e.g., set error bounds.
 		must_clean = true;
+		// all the same but (for example) X and Y out of bounds?
+		if (image_field_bits & IMAGE_ALL_SAME) {
+			image_type = IMAGE_TYPE_HEIGHTFIELD;
+			if (gOptions.analyze) {
+				std::wcout << "Image file '" << inputFile << "' is perhaps a heightfield,\n  but all texel triplet values are the same (heights do not vary).\n  r = " << first_pixel[0] << ", g = " << first_pixel[1] << ", b = " << first_pixel[2] << "\n";
+			}
+		}
 		// were the X and Y coordinates reasonable or not?
-		// TODO should probably add an "almost valid" test, too, like off by 1 or 2 or whatever.
-		if (!(image_field_bits & IMAGE_ALMOST2_VALID_NORMALS_XY)) {
+		//else if (!(image_field_bits & IMAGE_ALMOST2_VALID_NORMALS_XY)) {
+		// If less than 95% of XY's were reasonable, consider the thing likely to be a heightfield
+		else if ((normalizable_xy[2] + normalizable_xy[1] + normalizable_xy[0]) < (1.0f - gOptions.errorPercent) * image_size) {
 			// the X and Y values are out of range, so assume it's a heightfield
 			image_type = IMAGE_TYPE_HEIGHTFIELD;
 			if (gOptions.analyze) {
 				std::wcout << "Image file '" << inputFile << "' is probably a heightfield texture.\n";
 				std::wcout << "  The X and Y coordinates form vectors of about length 1.0 or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
+				std::wcout << "  " << xy_outside_bounds << " texels total are greater than length 1.0 + epsilon " << 2.0f * MAX_NORMAL_LENGTH_DIFFERENCE << "\n";
 				std::wcout << "  The longest XY length vector found is " << xymaxlength << " (maximum possible is " << sqrt(2.0f) << ")\n";
 			}
 		}
 		else {
-			// Which has fewer values outside the bounds?
+			// Which interpretation of Z - zero or negative 1 minimum - gives a smaller difference in normal lengths computed?
+			// Alternate test: Which has fewer values outside the bounds?
+			//if (z_outside_bounds < z_outside_zzero_bounds) {
 			// Whichever it is, the input file could be a heightfield or a file with XY only. Right now we favor XY only, but that could be changed or modified with options.
-			if (z_outside_bounds < z_outside_zero_bounds) {
-
+			if (maxnormallength-minnormallength <= zzero_maxnormallength-zzero_minnormallength) {
+				// More likely Z -1 to 1
 				// how much did the z value vary from expected?
-				if (zmaxabsdiff > 2) {
+				// stricter: if (zmaxabsdiff > 2) {
+				if (z_outside_bounds > gOptions.errorPercent * image_size) {
 					image_type = IMAGE_TYPE_NORMAL_XY_ONLY;
 					if (gOptions.analyze) {
-						std::wcout << "Image file '" << inputFile << "' is probably an XY-only normal texture,\n  with at least " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texel Z values being more than two from being properly normalized.\n";
-						std::wcout << "  The z value was found to be as far off as " << zmaxabsdiff << " in expected value,\n  and was greater than a difference of two for " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texels.\n";
+						std::wcout << "Image file '" << inputFile << "' is probably an XY-only normals texture,\n";
+						std::wcout << "  with the X and Y coordinates forming vectors of about length 1.0 or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
+						std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texel Z values are more than 2 levels from being properly normalized.\n";
+						std::wcout << "  The z value was found to be as far off as " << zmaxabsdiff << " levels in expected value,\n  and was greater than a difference of 2 levels for " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texels.\n";
 					}
 				}
 				else {
 					image_type = IMAGE_TYPE_NORMAL_FULL;
 					if (gOptions.allowNegativeZ || (image_field_bits & IMAGE_VALID_ZVAL_NONNEG)) {
 						if (gOptions.analyze) {
-							std::wcout << "Image file '" << inputFile << "' may be a normal texture, with " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texel Z values being more than two from being properly normalized.\n";
+							std::wcout << "Image file '" << inputFile << "' may be a normals texture,\n";
+							std::wcout << "  with the X and Y coordinates forming vectors of about length 1.0 or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
+							std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texel Z values are more than 2 levels from being properly normalized.\n";
+							std::wcout << "  The z value was found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
 						}
 					}
 					else {
 						if (gOptions.analyze) {
-							std::wcout << "Image file '" << inputFile << "' might be a normal texture, with " << 100.0f * (float)normal_zval_nonnegative / (float)image_size << " percent of the Z values being non-negative\n"
-								<< "  and " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texel Z values being more than two from being properly normalized.\n"
-								<< "  The most negative Z value found was " << min_z << "\n";
+							std::wcout << "Image file '" << inputFile << "' might be a normals texture,\n";
+							std::wcout << "  with the X and Y coordinates forming vectors of about length 1.0 or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
+							std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texel Z values are more than 2 levels from being properly normalized.\n";
+							std::wcout << "  The z value was found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
+							std::wcout << "  The most negative Z value found was " << min_z << "\n";
 						}
 					}
 				}
 			}
 			else {
+				// More likely Z 0 to 1
 				// how much did the z value vary from expected?
-				if (zmaxabsdiff_zero > 2) {
+				// stricter: zmaxabsdiff_zero > 2
+				if (z_outside_zzero_bounds > gOptions.errorPercent * image_size) {
 					image_type = IMAGE_TYPE_NORMAL_XY_ONLY;
 					if (gOptions.analyze) {
-						std::wcout << "Image file '" << inputFile << "' is probably an XY-only normal texture,\n  with at least " << 100.0f * (float)z_outside_zero_bounds / (float)image_size << " percent of the texel Z values being more than two from being properly normalized.\n";
-						std::wcout << "  The z value was found to be as far off as " << zmaxabsdiff_zero << " in expected value,\n  and was greater than a difference of two for " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texels.\n";
+						std::wcout << "Image file '" << inputFile << "' is probably an XY-only normals texture,\n";
+						std::wcout << "  with the X and Y coordinates forming vectors of about length 1.0 or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
+						std::wcout << "  " << 100.0f * (float)z_outside_zzero_bounds / (float)image_size << " percent of the texel Z values are more than two from being properly normalized.\n";
+						std::wcout << "  The z value (assuming range 0 to 1) was found to be as far off as " << zmaxabsdiff_zero << " levels in expected value.\n";
 					}
 				}
 				else {
 					image_type = IMAGE_TYPE_NORMAL_ZERO;
 					if (gOptions.analyze) {
-						std::wcout << "Image file '" << inputFile << "' may be a normal texture with Z ranging from 0.0 to 1.0.\n";
+						std::wcout << "Image file '" << inputFile << "' may be a normals texture with Z ranging from 0.0 to 1.0,\n";
+						std::wcout << "  with the X and Y coordinates forming vectors of about length 1.0 or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
+						std::wcout << "  " << 100.0f * (float)z_outside_zzero_bounds / (float)image_size << " percent of the texel Z values are more than two from being properly normalized.\n";
+						std::wcout << "  The z value (assuming range 0 to 1) was found to be as far off as " << zmaxabsdiff_zero << " levels in expected value.\n";
 					}
 				}
 			}
+			if (gOptions.analyze) {
+				std::wcout << "  Assuming Z -1 to 1, normal lengths found in original data: minimum " << minnormallength << " and maximum " << maxnormallength << "\n";
+				std::wcout << "  Assuming Z 0 to 1, normal lengths found in original data: minimum " << zzero_minnormallength << " and maximum " << zzero_maxnormallength << "\n";
+			}
 		}
 	}
+	assert(image_type);
 
-	// additional info
+	// additional info for if particular channels are constant
 	if (!(image_field_bits & IMAGE_ALL_SAME)) {
 		if (image_field_bits & IMAGE_R_CHANNEL_ALL_SAME) {
 			if (gOptions.analyze) {
@@ -898,6 +1108,8 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 		switch (image_type) {
 		case 0x0:
 			gListUnknown += L" " + if_string;
+			// currently should never reach here
+			assert(0);
 			break;
 		case IMAGE_TYPE_NORMAL_FULL:
 			gListStandard += L" " + if_string;
@@ -927,8 +1139,8 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 
 	// Now see if we want to output the file
 	if ((image_type > 0) && (gOptions.outputAll || (must_clean && gOptions.outputClean))) {
-		// Output all or output clean file
-		
+		// Output all or output only files that need to be cleaned
+
 		// Do we flip the Y axis on output? Do only if parity doesn't match
 		bool y_flip = (gOptions.inputDirectX != gOptions.outputDirectX);
 
@@ -938,54 +1150,94 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 		destination.height = imageInfo.height;
 		destination.image_data.resize(destination.width * destination.height * 3 * sizeof(unsigned char), 0x0);
 
+		bool perform_output = true;
 		if (image_type == IMAGE_TYPE_HEIGHTFIELD) {
-			// For heightfields, we pay attention to just the output format specified.
-			y_flip = gOptions.outputDirectX;
+			if (gOptions.outputHeatmap) {
+				std::wcout << "WARNING: input image '" << inputFile << "' is categorized as a heightfield, so heatmap output is meaningless and so is not done.\n\n" << std::flush;
+				perform_output = false;
+			}
+			else {
+				// For heightfields, we pay attention to just the output format specified.
+				y_flip = gOptions.outputDirectX;
 
-			// convert from heightfield
-			if (gOptions.verbose) {
-				std::wcout << ">> Converting heightfield to normal texture.\n" << std::flush;
+				// convert from heightfield
+				if (gOptions.verbose) {
+					std::wcout << ">> Converting heightfield to normals texture.\n" << std::flush;
+				}
+				convertHeightfieldToXYZ(&destination, &imageInfo, gOptions.heightfieldScale, y_flip, gOptions.borderHeightfield);
 			}
-			convertHeightfieldToXYZ(&destination, &imageInfo, gOptions.heightfieldScale, y_flip);
-		} else {
-			// input is a normal texture of some type, so output it, cleaning as needed, flipping y if needed.
+		}
+		else {
+			// input is a normals texture of some type, so output it, cleaning as needed, flipping y if needed.
 			if (gOptions.verbose) {
-				std::wcout << ">> Readying output normal texture.\n" << std::flush;
+				std::wcout << ">> Readying output " << (gOptions.outputHeatmap ? "heatmap" : "normals") << " texture.\n" << std::flush;
 			}
-			cleanAndCopyNormalTexture(&destination, &imageInfo, image_type, must_clean, gOptions.outputZzeroToOne, y_flip);
+			cleanAndCopyNormalTexture(&destination, &imageInfo, image_type, gOptions.outputZzeroToOne, y_flip, gOptions.outputHeatmap);
 		}
 
-		// The outputFile has the same file name as the inputFile, possibly different path.
+		if (perform_output) {
+			// The outputFile has the same file name as the inputFile, possibly different path.
 
-		wchar_t outputPathAndFile[MAX_PATH];
-		// note that outputDirectory already has a "/" at the end, due to manipulation at the start of the program
-		wcscpy_s(outputPathAndFile, MAX_PATH, gOptions.outputDirectory.c_str());
+			wchar_t outputPathAndFile[MAX_PATH];
+			// note that outputDirectory already has a "/" at the end, due to manipulation at the start of the program
+			wcscpy_s(outputPathAndFile, MAX_PATH, gOptions.outputDirectory.c_str());
 
-		// We always use PNG as output, so change the .TGA suffix if need be.
-		wchar_t fileName[MAX_PATH];
-		wcscpy_s(fileName, MAX_PATH, inputFile);
-		size_t suffix_pos = wcslen(fileName) - 4;
-		if (_wcsicmp(&fileName[suffix_pos], L".tga") == 0) {
-			// change to PNG
-			fileName[suffix_pos] = 0;
-			wcscat_s(fileName, MAX_PATH, L".png");
-		}
+			// We always use PNG as output, so change the .TGA suffix if need be.
+			wchar_t fileName[MAX_PATH];
+			wcscpy_s(fileName, MAX_PATH, inputFile);
+			size_t suffix_pos = wcslen(fileName) - 4;
+			if (_wcsicmp(&fileName[suffix_pos], L".tga") == 0) {
+				assert(file_type == TGA_EXTENSION_FOUND);
+				// change to _TGA.PNG
+				fileName[suffix_pos] = 0;
+				wcscat_s(fileName, MAX_PATH, L"_tga.png");
+			}
 
-		// add the file name to the output directory
-		wcscat_s(outputPathAndFile, MAX_PATH, fileName);
+			// add the file name to the output directory
+			wcscat_s(outputPathAndFile, MAX_PATH, fileName);
 
-		rc = writepng(&destination, 3, outputPathAndFile);
-		if (rc != 0)
-		{
-			reportReadError(rc, outputPathAndFile);
-			// quit
-			return rc_output;
+			rc = writepng(&destination, 3, outputPathAndFile);
+			if (rc != 0)
+			{
+				reportReadError(rc, outputPathAndFile);
+				// quit
+				return rc_output;
+			}
+			if (gOptions.verbose) {
+				std::wcout << "  New texture '" << outputPathAndFile << "' created.\n";
+				// Note what's been done
+				if (gOptions.outputDirectX) {
+					std::wcout << "    Using DirectX (Y down) format.\n";
+				}
+				if (gOptions.outputZzeroToOne) {
+					std::wcout << "    Outputting Z to the range 0.0 to 1.0.\n";
+				}
+				if (image_type == IMAGE_TYPE_HEIGHTFIELD) {
+					std::wcout << "    Converted to a heightfield using a scale factor of " << gOptions.heightfieldScale <<
+						" and " << (gOptions.borderHeightfield ? "border" : "tiling") << " at the edges.\n";
+				}
+				else {
+					if (!(image_field_bits |= IMAGE_VALID_NORMALS_XY)) {
+						std::wcout << "    X,Y pairs were renormalized to be a length of 1.0 or less.\n";
+					}
+					if (((image_type == IMAGE_TYPE_NORMAL_FULL) && !(image_field_bits & IMAGE_ALMOST2_VALID_NORMALS_FULL)) ||
+						((image_type == IMAGE_TYPE_NORMAL_ZERO) && !(image_field_bits & IMAGE_ALMOST2_VALID_NORMALS_ZERO))) {
+						std::wcout << "    Normals were renormalized to be the correct length.\n";
+					}
+					else if (((image_type == IMAGE_TYPE_NORMAL_FULL) && !(image_field_bits & IMAGE_VALID_NORMALS_FULL)) ||
+						((image_type == IMAGE_TYPE_NORMAL_ZERO) && !(image_field_bits & IMAGE_VALID_NORMALS_ZERO))) {
+						std::wcout << "    Normals were cleaned up to roundtrippable triplets.\n";
+					}
+
+					if ((image_type == IMAGE_TYPE_NORMAL_FULL) && !(image_field_bits |= IMAGE_VALID_ZVAL_NONNEG)) {
+						std::wcout << "    Z values were adjusted to not be negative.\n";
+					}
+				}
+				std::wcout << "\n" << std::flush;
+			}
+			rc_output = true;
 		}
 		writepng_cleanup(&destination);
-		if (gOptions.verbose) {
-			std::wcout << "New texture '" << outputPathAndFile << "' created.\n\n" << std::flush;
-		}
-		rc_output = true;
 	}
 
 	// clean up input image info.
@@ -995,14 +1247,17 @@ static bool processImageFile(wchar_t* inputFile, int fileType)
 
 void printHelp()
 {
-	std::wcerr << "NormalTextureProcessor version " << VERSION_STRING << "\n";
+	if (!gOptions.verbose) {
+		// was already output if verbose is on.
+		std::wcerr << "NormalTextureProcessor version " << VERSION_STRING << "\n";
+	}
 	std::wcerr << "usage: NormalTextureProcessor [-options] [file1.png file2.png...]\n";
 	std::wcerr << "  -a - analyze texture files read in and output report.\n";
 	std::wcerr << "  -idir path - give a relative or absolute path for what directory of files to read in.\n";
-	std::wcerr << "  -izneg - assume all input files are normal textures with Z's between -1 and 1.\n";
-	std::wcerr << "  -izzero - assume all input files are normal textures with Z's between 0 and 1.\n";
+	std::wcerr << "  -izneg - assume all input files are normals textures with Z's between -1 and 1.\n";
+	std::wcerr << "  -izzero - assume all input files are normals textures with Z's between 0 and 1.\n";
 	std::wcerr << "  -ixy - assume all input files have just X and Y values (Z channel is something else).\n";
-	std::wcerr << "  -idx - assume normal texture input files use DirectX-style (Y down) mapping for the green channel.\n";
+	std::wcerr << "  -idx - assume normals texture input files use DirectX-style (Y down) mapping for the green channel.\n";
 	std::wcerr << "  -ihf - assume all input files are heightfields (converted to grayscale).\n";
 	std::wcerr << "  -oall - output all texture files read in, as possible.\n";
 	std::wcerr << "  -oclean - clean and output all texture files that are not considered perfect.\n";
@@ -1010,15 +1265,17 @@ void printHelp()
 	std::wcerr << "  -ozzero - output files so that their blue channel value maps Z from 0 to 1 instead of -1 to 1.\n";
 	std::wcerr << "  -allownegz - do not flag problems with Z being negative and maintain Z's sign on output.\n";
 	std::wcerr << "  -odx - output files using the DirectX-style (Y down) mapping for the green channel.\n";
+	std::wcerr << "  -oheatmap - output red for XY > 1.0, green for non-matching Z's, blue for negative Z's.\n";
 	std::wcerr << "  -hfs # - for heightfields, specify output scale.\n";
-	std::wcerr << "  -hborder - treat heightfields as having a border (instead of tiling and wrapping around) when converting to a normal texture.\n";
+	std::wcerr << "  -hborder - treat heightfields as having a border (instead of wrapping around) when converting to a normals texture.\n";
+	std::wcerr << "  -etol # - when classifying a texture, what percentage of texels can fail. Default tolerance is 2 percent.\n";
+	std::wcerr << "  -csv - output all texel values and possible conversions to a comma-separated value file (for a spreadsheet).\n";
+	std::wcerr << "  -csve - output only texel values far out of range to a comma-separated value file (for a spreadsheet).\n";
 	std::wcerr << "  -v - verbose, explain everything going on. Default: display only warnings and errors.\n";
 	std::wcerr << std::flush;
 }
 
-//====================== statics ==========================
-
-static void reportReadError(int rc, const wchar_t* filename)
+void reportReadError(int rc, const wchar_t* filename)
 {
 	switch (rc) {
 	case 1:
@@ -1070,7 +1327,7 @@ static void reportReadError(int rc, const wchar_t* filename)
 	}
 }
 
-static void saveErrorForEnd()
+void saveErrorForEnd()
 {
 	wprintf(gErrorString);
 	wcscat_s(gConcatErrorString, CONCAT_ERROR_LENGTH, L"  ");
@@ -1080,7 +1337,7 @@ static void saveErrorForEnd()
 //================================ Image Manipulation ====================================
 
 // assumes 3 channels are input
-void convertHeightfieldToXYZ(progimage_info* dst, progimage_info* src, float heightfieldScale, bool y_flip)
+void convertHeightfieldToXYZ(progimage_info* dst, progimage_info* src, float heightfieldScale, bool y_flip, bool clamp_border)
 {
 	int row, col;
 	// create temporary grayscale image of input and work off of that, putting the result in the output dst file
@@ -1091,13 +1348,27 @@ void convertHeightfieldToXYZ(progimage_info* dst, progimage_info* src, float hei
 
 	for (row = 0; row < phf->height; row++)
 	{
-		// TODOTODO - right now we always wrap around edges, grabbing the texel off the other edge. Other options possible.
+		// Ensure value is not negative by adding height to trow
 		int trow = (row + phf->height - 1) % phf->height;
-		int brow = (row + phf->height + 1) % phf->height;
+		int brow = (row + 1) % phf->height;
+		if (clamp_border) {
+			// undo the wraps if we want to clamp to the border
+			if (trow >= phf->height - 1)
+				trow = 0;
+			if (brow == 0)
+				brow = phf->height - 1;
+		}
 		for (col = 0; col < phf->width; col++)
 		{
 			int lcol = (col + phf->width - 1) % phf->width;
-			int rcol = (col + phf->width + 1) % phf->width;
+			int rcol = (col + 1) % phf->width;
+			if (clamp_border) {
+				// undo the wraps if we want to clamp to the border
+				if (lcol >= phf->width - 1)
+					lcol = 0;
+				if (rcol == 0)
+					rcol = phf->width - 1;
+			}
 			// From Real-Time Rendering, p. 214 referencing an article:
 			// Eberly, David, "Reconstructing a Height Field from a Normal Map," Geometric Tools blog, May 3, 2006.
 			// https://www.geometrictools.com/Documentation/ReconstructHeightFromNormals.pdf
@@ -1117,14 +1388,41 @@ void convertHeightfieldToXYZ(progimage_info* dst, progimage_info* src, float hei
 			// assume Z value is 1.0 and use this length to normalize the normal
 			float length = (float)sqrt(x * x + y * y + 1.0f);
 			// normalize and map from XYZ [-1,1] to RGB
-			*dst_data++ = (unsigned char)(((x / length + 1.0f) / 2.0f) * 255.0f + 0.5f);
-			*dst_data++ = (unsigned char)(((y / length + 1.0f) / 2.0f) * 255.0f + 0.5f);
-			*dst_data++ = (unsigned char)(((1.0f / length + 1.0f) / 2.0f) * 255.0f + 0.5f);
+			// Always roundtrip the data. What's this mean? Right now we have an XYZ we've produced above. What can happen
+			// is that, if we convert to RGB, then convert back to XYZ, normalize XYZ, then convert to RGB again, the second RGB will
+			// be slightly different in Z value.
+			//if (gOptions.roundtrip) {
+				unsigned char r = *dst_data++ = (unsigned char)(((x / length + 1.0f) / 2.0f) * 255.0f + 0.5f);
+				unsigned char g = *dst_data++ = (unsigned char)(((y / length + 1.0f) / 2.0f) * 255.0f + 0.5f);
+				// To make a triplet round-tripable, you need to compute b from the r and g -> X and Y values, not X and Y themselves.
+				CONVERT_CHANNEL_TO_FULL(r, x);
+				CONVERT_CHANNEL_TO_FULL(g, y);
+				float z;
+				COMPUTE_Z_FROM_XY(x, y, z);
+				if (gOptions.outputZzeroToOne) {
+					CONVERT_ZERO_TO_CHANNEL(z, *dst_data++);
+				}
+				else {
+					CONVERT_FULL_TO_CHANNEL(z, *dst_data++);
+				}
+			//} else {
+			//	// could use CONVERT_FULL_TO_CHANNEL, but I think it's clearer to write it out here
+			//	*dst_data++ = (unsigned char)(((x / length + 1.0f) / 2.0f) * 255.0f + 0.5f);
+			//	*dst_data++ = (unsigned char)(((y / length + 1.0f) / 2.0f) * 255.0f + 0.5f);
+			//	if (gOptions.outputZzeroToOne) {
+			//		*dst_data++ = (unsigned char)((1.0f / length) * 255.0f + 0.5f);
+			//	}
+			//	else {
+			//		*dst_data++ = (unsigned char)(((1.0f / length + 1.0f) / 2.0f) * 255.0f + 0.5f);
+			//	}
+			//}
 		}
 	}
 }
 
-void cleanAndCopyNormalTexture(progimage_info* dst, progimage_info* src, int image_type, bool must_clean, bool output_zzero, bool y_flip)
+// TODO: add conversion of normals to heightfield. Can we derive DirectX vs. OpenGL style from this info in some way? (correlation of bumps)
+
+void cleanAndCopyNormalTexture(progimage_info* dst, progimage_info* src, int image_type, bool output_zzero, bool y_flip, bool heatmap)
 {
 	int row, col;
 	float x, y, z;
@@ -1143,27 +1441,25 @@ void cleanAndCopyNormalTexture(progimage_info* dst, progimage_info* src, int ima
 
 			// Clean up x,y if needed, then finally convert back to r,g,b.
 			// Really, we could always do the code below as a sanity check, but I like to think this saves a few microseconds overall.
-			if (must_clean) {
-				// are X and Y invalid, forming a vector > 1.0 in length?
-				// TODOTODO check that this code gets hit.
-				float xy_len2 = x * x + y * y;
-				if (xy_len2 > 1.0f) {
-					// rescale x and y to fit (what else could we possibly do?) and set z - done!
-					float xy_length = sqrt(xy_len2);
-					x /= xy_length;
-					y /= xy_length;
-					// yes, the normal has to point sideways (what else could it be? The normal's too big), and we're done computing Z
-					z = 0.0f;
-				}
-				else {
-					// all's well with XY length, so compute Z from it
-					COMPUTE_Z_FROM_XY(x, y, z);
-				}
+			unsigned char heatmap_r, heatmap_g, heatmap_b;
+			heatmap_r = 0;
+			heatmap_g = 0;
+			heatmap_b = 0;
+
+			// are X and Y invalid, forming a vector > 1.0 in length?
+			// TODOTODO check that this code gets hit.
+			float xy_len2 = x * x + y * y;
+			if (xy_len2 > 1.0f) {
+				heatmap_r = 255;
+				// rescale x and y to fit (what else could we possibly do?) and set z - done!
+				float xy_length = sqrt(xy_len2);
+				x /= xy_length;
+				y /= xy_length;
+				// yes, the normal has to point sideways (what else could it be? The normal's too big), and we're done computing Z
+				z = 0.0f;
 			}
 			else {
-				// no cleaning, just compute Z
-				assert(x * x + y * y <= 1.0f);
-
+				// all's well with XY length, so compute Z from it
 				COMPUTE_Z_FROM_XY(x, y, z);
 			}
 
@@ -1183,14 +1479,51 @@ void cleanAndCopyNormalTexture(progimage_info* dst, progimage_info* src, int ima
 				}
 			}
 
-			// and save; Z is (normally) guaranteed to not be negative because we computed it
-			if (output_zzero) {
-				// convert back to rgb
-				CONVERT_Z_ZERO_TO_RGB(x, y, z, dst_data[0], dst_data[1], dst_data[2]);
+			if (heatmap) {
+				// red is XY's > 1, green is Z's not matching or out of bounds, blue is negative Z's
+				float zdata, diff;
+				unsigned char bcalc, bread;
+				if (image_type == IMAGE_TYPE_NORMAL_FULL) {
+					CONVERT_CHANNEL_TO_FULL(src_data[2], zdata);
+					// convert both z's back to pixel space and use difference
+					CONVERT_FULL_TO_CHANNEL(zdata, bread);
+					CONVERT_FULL_TO_CHANNEL(z, bcalc);
+					diff = abs(bread - bcalc) * 255.0f / 2.99f;
+					if (diff > 255.0f) {
+						diff = 255.0f;
+					}
+					heatmap_g = (unsigned char)diff;
+					if (src_data[1] <= 127) {
+						// just barely negative, by one level; precision
+						heatmap_b = 255 - src_data[1];
+					}
+				}
+				else if (image_type == IMAGE_TYPE_NORMAL_ZERO) {
+					CONVERT_CHANNEL_TO_ZERO(src_data[2], zdata);
+					// convert both z's back to pixel space and use difference
+					CONVERT_ZERO_TO_CHANNEL(zdata, bread);
+					CONVERT_ZERO_TO_CHANNEL(z, bcalc);
+					diff = abs(bread - bcalc) * 255.0f / 2.99f;
+					if (diff > 255.0f) {
+						diff = 255.0f;
+					}
+					heatmap_g = (unsigned char)diff;
+				}
+				dst_data[0] = heatmap_r;
+				dst_data[1] = heatmap_g;
+				dst_data[2] = heatmap_b;
 			}
 			else {
-				// convert back to rgb
-				CONVERT_Z_FULL_TO_RGB(x, y, z, dst_data[0], dst_data[1], dst_data[2]);
+
+				// and save; Z is (normally) guaranteed to not be negative because we computed it
+				if (output_zzero) {
+					// convert back to rgb
+					CONVERT_Z_ZERO_TO_RGB(x, y, z, dst_data[0], dst_data[1], dst_data[2]);
+				}
+				else {
+					// convert back to rgb
+					CONVERT_Z_FULL_TO_RGB(x, y, z, dst_data[0], dst_data[1], dst_data[2]);
+				}
 			}
 
 			// next texel
