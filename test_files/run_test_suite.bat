@@ -10,9 +10,33 @@ set NTP_EXE="..\x64\Release\NormalTextureProcessor.exe"
 @rem how are various non-normal, non-bump files interpreted?
 %NTP_EXE% -idir NoneOfTheAbove -odir output_NoneOfTheAbove -oall -a -v
 
-@rem other tests
-@rem maintain Z-zero format on output
-@rem the 0 to 1 file produced by NormalMap Online is so funky we have to force it to be read in as Z-zero, using -izzero
-%NTP_EXE% -idir ZZero -odir output_ZZero_stay_zzero -oall -a -v -izzero -ozzero
+@rem Other tests follow, mostly unit tests to exercise and demonstrate the various options
 
-@rem TODO: test in place (replacing existing file with itself), test -idx -ihs and other options, test being in a directory and not specifying a directory
+@rem the 0 to 1 file produced by NormalMap Online is so funky we have to force it to be read in as Z-zero, using -izzero. Also output as -ozzero, making this a cleanup sort of pass
+%NTP_EXE% -idir ZZero -odir output_ZZero_stay_zzero -oclean -a -v -izzero -ozzero squiggles_normalmap_online_zzero.png
+
+@rem another way is to set the tolerance percentage higher, '-etol 8', which increases the tolerance for bad normals (and other bad data), so letting this one be classified as Z-zero
+%NTP_EXE% -idir ZZero -odir output_ZZero_find_zzero -oclean -a -v -etol 8 squiggles_normalmap_online_zzero.png
+
+@rem make the wood bumpmap have more extreme bumps and have borders instead of being tiling (repeating)
+%NTP_EXE% -idir Heightfields -odir output_Heightfields_scale -oall -a -v -hfs 15 grayscale_wood_floor.png -hborder
+
+@rem convert the squiggles heightfield to have a border, which makes more sense since it's not meant to be tiling
+%NTP_EXE% -idir Heightfields -odir output_Heightfields_border -oall -a -v squiggles.png -hborder
+
+@rem force colored wood floor to be considered a heightfield
+%NTP_EXE% -idir NoneOfTheAbove -odir output_NoneOfTheAbove_force -oall -a -v -ihf wood_floor.png
+
+@rem GIMP gives DirectX-style by default. Convert to OpenGL-style, and force to be standard Z, just to test the -izneg flag
+%NTP_EXE% -idir Standard -odir output_Standard_OpenGL -oall -a -v -izneg -idx squiggles_gimp.png
+
+@rem convert the r_normal_map.png OpenGL-style file to DirectX style. Note there is no '-iogl' input option needed, since OpenGL format is the default.
+%NTP_EXE% -idir Standard -odir output_Standard_DirectX -oall -a -v -izneg -odx r_normal_map.png
+
+@rem export to CSV, showing only errors
+%NTP_EXE% -idir Standard -odir output_CSV -a -v r_normal_map.png -csve -izneg
+
+@rem export to CSV, dumping all pixels
+%NTP_EXE% -idir NoneOfTheAbove -odir output_CSV -a -v fade.png -csv -ixy
+
+@rem TODO: Flag currently not tested here, due to a lack of bad test data: -allownegz

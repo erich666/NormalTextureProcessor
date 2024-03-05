@@ -1,4 +1,4 @@
-# NormalTextureProcessor
+# NormalTextureProcessor (aka NTP)
 
 ## Description
 
@@ -8,7 +8,7 @@ This C++ project examines normals textures (i.e., textures for applying bumps to
 
 ## Installation
 
-Develop on Windows 10 on Visual Studio 2022 (double-click NormalTextureProcessor.sln, build Release version). You might be able to compile and run it elsewhere, as the program is purely command-line driven, no graphical user interface.
+Develop on Windows 10 on Visual Studio 2022 (double-click NormalTextureProcessor.sln, build Release version). You might be able to compile and run it elsewhere, as the program is pretty Windows-free and is purely command-line driven, with no graphical user interface.
 
 ## Usage
 
@@ -23,7 +23,7 @@ NormalTextureProcessor.exe
 
 ### Test Suite
 
-After building the Release version, you should be able to go into the **test_files** directory and double-click on **run_test_suite.bat**. As the README in that directory notes, running this test file will create various separate output directories where the results are put. You can look at **run_test_suite.bat** to see various options in use and look at the resulting files.
+After building the Release version, you should be able to go into the **test_files** directory and double-click on **run_test_suite.bat**. As the [README in that directory](https://github.com/erich666/NormalTextureProcessor/tree/main/test_files) notes, running this test file will create various separate output directories where the results are put. You can look at **run_test_suite.bat** to see various options in use and look at the resulting files.
 
 ### Analysis
 
@@ -84,6 +84,7 @@ In addition to analysis, this program cleans up and convert to different formats
 Typical operations include:
 * Clean up the normals in a texture. Use option '-oclean' to output only those files that need cleanup, '-oall' to output all files. Given a particular type of RGB texture, the program makes sure the normals are all properly normalized and that no Z values are negative.
   * If you want to maintain the sign of the Z value, use the '-allownegz' option.
+  * If you set the input file type (-izneg|-izzero|-ixy), no analysis is done and '-oclean' will force the cleaning and output of all files found.
 * Convert between formats.
   * OpenGL to DirectX, standard to Z-zero, or vice versa. OpenGl-style is the default, use '-idx' to note that the input files are DirectX-style (does not affect heightfields), '-odx' to set that you want to output in DirectX-style.
   * To export to the Z-Zero format, where Z goes from 0 to 1 instead of -1 to 1, use '-ozzero'.
@@ -194,6 +195,10 @@ Some resources I've found useful:
 ## License
 
 MIT license. See the [LICENSE](https://github.com/erich666/NormalTextureProcessor/blob/main/LICENSE) file in this directory.
+
+## Acknowledgements
+
+Thanks to Nick Porcino for the quick check on my conversion equations. Thanks to Koen Vroeijenstijn for discussions about 16-bit PNG formats.
 
 ## Roadmap
 

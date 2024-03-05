@@ -288,7 +288,7 @@ int wmain(int argc, wchar_t* argv[])
 		{
 			gOptions.inputDirectX = true;
 		}
-		else if (wcscmp(argv[argLoc], L"-inputHeightfield") == 0)
+		else if (wcscmp(argv[argLoc], L"-ihf") == 0)
 		{
 			gOptions.inputHeightfield = true;
 		}
@@ -364,6 +364,7 @@ int wmain(int argc, wchar_t* argv[])
 			// assume it's a file name, but let's check first if the user thinks it's an option
 			if (argv[argLoc][0] == '-') {
 				// unknown option
+				std::wcerr << "ERROR: unknown option '" << argv[argLoc] << "'.\n";
 				printHelp();
 				return 1;
 			}
@@ -377,11 +378,12 @@ int wmain(int argc, wchar_t* argv[])
 	}
 
 	// check validity of options only if we're actually outputing
-	if (!(gOptions.outputAll || gOptions.outputClean)) {
+	if (!(gOptions.outputAll || gOptions.outputClean || gOptions.csvAll || gOptions.csvErrors)) {
 		// No output mode chosen, so these options won't do anything
-		if (gOptions.inputHeightfield || gOptions.inputDirectX || gOptions.borderHeightfield || gOptions.outputDirectory.size() > 0 ||
+		if (gOptions.inputHeightfield || gOptions.inputDirectX || gOptions.borderHeightfield ||
+			gOptions.outputDirectory.size() > 0 ||
 				gOptions.outputDirectX || gOptions.outputZzeroToOne || gOptions.outputHeatmap) {
-			std::wcerr << "WARNING: options associated with output are set, but -oall or -oclean not set. One of these two must be chosen.\n" << std::flush;
+			std::wcerr << "WARNING: options associated with output are set, but -oall or -oclean are not set. One of these two must be chosen.\n" << std::flush;
 		}
 	}
 
@@ -403,7 +405,9 @@ int wmain(int argc, wchar_t* argv[])
 	}
 
 	if ((gOptions.csvAll || gOptions.csvErrors) && ((gOptions.inputZzeroToOne ? 1 : 0) + (gOptions.inputZnegOneToOne ? 1 : 0) + (gOptions.inputXYonly ? 1 : 0) != 1)) {
-		std::wcerr << "ERROR: for CSV output you must specify the input type [-izneg | -izzero | -ixy].\n" << std::flush;
+		std::wcerr << "ERROR: for CSV analysis output you must specify the input type [-izneg | -izzero | -ixy].\n" << std::flush;
+		printHelp();
+		return 1;
 	}
 
 	int pos;
@@ -707,12 +711,14 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 			// Check if the range of z values is non-negative. It may just be the normals are not normalized?
 			if (z > -MAX_NORMAL_LENGTH_DIFFERENCE) {
 				normal_zval_nonnegative++;
-				if (z < 0.0f) {
+				if (z < 0.0f && !gOptions.allowNegativeZ) {
 					err_z_neg_is_negative = '1';
 				}
 			}
 			else {
-				err_z_neg_is_negative = 'X';
+				if (!gOptions.allowNegativeZ) {
+					err_z_neg_is_negative = 'X';
+				}
 			}
 
 			// lowest z value found (for -1 to 1 conversion)
@@ -850,7 +856,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 	if (normal_length_zneg[2] + normal_length_zneg[1] + normal_length_zneg[0] == image_size) {
 		image_field_bits |= IMAGE_ALMOST2_VALID_NORMALS_FULL;
 	}
-	if (normal_zval_nonnegative == image_size) {
+	if (!gOptions.allowNegativeZ || (normal_zval_nonnegative == image_size)) {
 		image_field_bits |= IMAGE_VALID_ZVAL_NONNEG;
 	}
 	if (normal_length_zzero[0] == image_size) {
@@ -878,18 +884,24 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 	// What sort of normals texture is this?
 	if (gOptions.inputZnegOneToOne) {
 		image_type = IMAGE_TYPE_NORMAL_FULL;
+		// no analysis done, so assume the file needs cleaning
+		must_clean = true;
 		if (gOptions.analyze) {
 			std::wcout << "Image file '" << inputFile << "' forced to be a standard normals texture. No analysis performed.\n";
 		}
 	}
 	else if (gOptions.inputZzeroToOne) {
 		image_type = IMAGE_TYPE_NORMAL_ZERO;
+		// no analysis done, so assume the file needs cleaning
+		must_clean = true;
 		if (gOptions.analyze) {
 			std::wcout << "Image file '" << inputFile << "' forced to be a Z-zero normals texture. No analysis performed.\n";
 		}
 	}
 	else if (gOptions.inputXYonly) {
 		image_type = IMAGE_TYPE_NORMAL_XY_ONLY;
+		// no analysis done, so assume the file needs cleaning
+		must_clean = true;
 		if (gOptions.analyze) {
 			std::wcout << "Image file '" << inputFile << "' forced to be a normals texture with only X and Y input. No analysis performed.\n";
 		}
@@ -1031,7 +1043,8 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 				}
 				else {
 					image_type = IMAGE_TYPE_NORMAL_FULL;
-					if (gOptions.allowNegativeZ || (image_field_bits & IMAGE_VALID_ZVAL_NONNEG)) {
+					// note this is also true gOptions.allowNegativeZ is true
+					if (image_field_bits & IMAGE_VALID_ZVAL_NONNEG) {
 						if (gOptions.analyze) {
 							std::wcout << "Image file '" << inputFile << "' may be a normals texture,\n";
 							std::wcout << "  with the X and Y coordinates forming vectors of about length 1.0 or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
@@ -1138,7 +1151,9 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 	}
 
 	// Now see if we want to output the file
-	if ((image_type > 0) && (gOptions.outputAll || (must_clean && gOptions.outputClean))) {
+	if ((image_type > 0) &&
+		(gOptions.outputAll ||
+			((must_clean||(image_type == IMAGE_TYPE_HEIGHTFIELD)) && gOptions.outputClean))) {
 		// Output all or output only files that need to be cleaned
 
 		// Do we flip the Y axis on output? Do only if parity doesn't match
@@ -1207,7 +1222,10 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 				std::wcout << "  New texture '" << outputPathAndFile << "' created.\n";
 				// Note what's been done
 				if (gOptions.outputDirectX) {
-					std::wcout << "    Using DirectX (Y down) format.\n";
+					std::wcout << "    Output to DirectX (Y down) format.\n";
+				}
+				else if (gOptions.inputDirectX && !gOptions.outputDirectX) {
+					std::wcout << "    Converting from DirectX to OpenGL format.\n";
 				}
 				if (gOptions.outputZzeroToOne) {
 					std::wcout << "    Outputting Z to the range 0.0 to 1.0.\n";
@@ -1229,7 +1247,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 						std::wcout << "    Normals were cleaned up to roundtrippable triplets.\n";
 					}
 
-					if ((image_type == IMAGE_TYPE_NORMAL_FULL) && !(image_field_bits |= IMAGE_VALID_ZVAL_NONNEG)) {
+					if ((image_type == IMAGE_TYPE_NORMAL_FULL) && !(image_field_bits & IMAGE_VALID_ZVAL_NONNEG)) {
 						std::wcout << "    Z values were adjusted to not be negative.\n";
 					}
 				}
