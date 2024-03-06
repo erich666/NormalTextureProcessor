@@ -446,7 +446,6 @@ int wmain(int argc, wchar_t* argv[])
 		}
 		// add a "/" to the output directory path if not there; do it now
 		pos = (int)gOptions.outputDirectory.size() - 1;
-		// TODOTODO - test with "\" at end of input directory
 		if (gOptions.outputDirectory[pos] != '/' && gOptions.outputDirectory[pos] != '\\') {
 			gOptions.outputDirectory.push_back('/');
 		}
@@ -1562,7 +1561,6 @@ void convertHeightfieldToXYZ(progimage_info* dst, progimage_info* src, float hei
 				// by the code above. So if the DirectX style is needed, it's already done. This is for OpenGL style.
 				// The reason it's DirectX-style by default is due to the nature of the equations being done from the upper
 				// left corner: trow < brow, just like lcol < rcol
-				// TODOTODO verify!
 				y = -y;
 			}
 			// assume Z value is 1.0 and use this length to normalize the normal
