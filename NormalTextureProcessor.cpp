@@ -692,12 +692,24 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 	char err_outside_z = ' ';
 	char err_outside_z_zero = ' ';
 	int gray = 0;	// initialized to make the compiler happy
+	//int ignore_normal_texel_count = 0;
 
 	for (row = 0; row < imageInfo.height; row++)
 	{
 		for (col = 0; col < imageInfo.width; col++)
 		{
-			// does this pixel match the first pixel? (i.e. are all pixels the same?)
+			// TODO: should probably ignore texels that are all-black or all-white as far as
+			// analysis goes. We could assume such texels are in unused parts of the texture.
+			// If we go this route, the XYZ statistics get messier.
+			//bool black_or_white = false;
+			//if ((src_data[0] == 0 && src_data[1] == 0 && src_data[2] == 0) ||
+			//	(src_data[0] == 255 && src_data[1] == 255 && src_data[2] == 255)) {
+			//	// note how many black and white
+			//	ignore_normal_texel_count++;
+			//	black_or_white = true;
+			//}
+
+			// Does this pixel match the first pixel? (i.e. are all pixels the same?)
 			if (src_data[0] == first_pixel[0] && src_data[1] == first_pixel[1] && src_data[2] == first_pixel[2]) {
 				pixels_match++;
 			}
@@ -729,6 +741,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 				grayscale++;
 			}
 
+			//if (!black_or_white) {
 			// Try conversion to XYZ's. Which if any make sense?
 			CONVERT_RGB_TO_Z_FULL(src_data[0], src_data[1], src_data[2], x, y, z);
 			CONVERT_CHANNEL_TO_ZERO(src_data[2], zzero);
@@ -855,6 +868,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 				xy_outside_bounds++;	// just a place to put a break and see what's what
 				err_outside_xy = 'X';
 			}
+
 			if (gOptions.csvAll ||
 				(gOptions.csvErrors && (err_z_neg_is_negative != ' ' || (!gOptions.inputZzeroToOne && (err_outside_z != ' ')) || (!gOptions.inputZnegOneToOne && (err_outside_z_zero != ' ')) || err_outside_xy != ' '))) {
 				//csvOutput << "Column, Row, r, g, b, X, Y, Z, Z-zero, XY length, XYZ length, XYZ-zero length, XY > 1, Z < 0, XYZ != 1, XYZ-zero != 1\n";
@@ -1038,7 +1052,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 					}
 					std::wcout << "  Reason: the percentage of stored Z -1 to 1 values that do not make normalized XYZ vectors is " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent,\n    smaller than the error tolerance of " << 100.0f * gOptions.errorTolerance << " percent.\n";
 				}
-				std::wcout << "    " << 100.0f * (float)(image_size - z_outside_bounds) / (float)image_size << " percent of Z's are valid for range -1 to 1, " << 100.0f * (float)(image_size - z_outside_zzero_bounds) / (float)image_size << " percent are valid for range 0 to 1\n";
+				std::wcout << "    " << 100.0f * (float)(image_size - z_outside_bounds) / (float)image_size << " percent of Z's are valid for range -1 to 1, " << 100.0f * (float)(image_size - z_outside_zzero_bounds) / (float)image_size << " percent are valid for range 0 to 1.\n";
 			}
 			else {
 				// More likely Z 0 to 1
@@ -1054,7 +1068,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 					std::wcout << "Image file '" << inputFile << "' may be a Z-zero normals texture, with Z ranging from 0.0 to 1.0.\n";
 					std::wcout << "  Reason: the percentage of stored Z 0 to 1 values that do not make normalized XYZ vectors is " << 100.0f * (float)z_outside_zzero_bounds / (float)image_size << " percent,\n    lower than the error tolerance of " << 100.0f * gOptions.errorTolerance << " percent.\n";
 				}
-				std::wcout << "    " << 100.0f * (float)(image_size - z_outside_zzero_bounds) / (float)image_size << " percent of Z's are valid for range 0 to 1, " << 100.0f * (float)(image_size - z_outside_bounds) / (float)image_size << " percent are valid for range -1 to 1\n";
+				std::wcout << "    " << 100.0f * (float)(image_size - z_outside_zzero_bounds) / (float)image_size << " percent of Z's are valid for range 0 to 1, " << 100.0f * (float)(image_size - z_outside_bounds) / (float)image_size << " percent are valid for range -1 to 1.\n";
 			}
 		}
 	}

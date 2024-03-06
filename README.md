@@ -10,6 +10,8 @@ This C++ project examines normals textures (i.e., textures for applying bumps to
 
 Develop on Windows 10 on Visual Studio 2022 (double-click NormalTextureProcessor.sln, build Release version). You might be able to compile and run it elsewhere, as the program is pretty Windows-free and is purely command-line driven, with no graphical user interface.
 
+The executable is available for download, [zip file here](https://www.realtimerendering.com/erich/download/NormalTextureProcessor.zip). Last updated March 6, 2024.
+
 ## Usage
 
 This system has a few major functions: analyze normals textures for what type and how good a normals texture they are, clean up textures that have problems, and convert from one normals texture type to another. Currently the system is limited to reading in 8-bit PNG and TGA (Targa) textures. 16-bit PNG images can be read in, but are currently converted to 8 bits. To avoid name collisions with PNGs, Targa files read in and manipulated are output with the suffix "_TGA" added to the input file name, output as PNGs.
@@ -84,7 +86,7 @@ In addition to analysis, this program cleans up and convert to different formats
 Typical operations include:
 * Clean up the normals in a texture. Use option '-oclean' to output only those files that need cleanup, '-oall' to output all files. Given a particular type of RGB texture, the program makes sure the normals are all properly normalized and that no Z values are negative.
   * If you want to maintain the sign of the Z value, use the '-allownegz' option.
-  * If you set the input file type (-izneg|-izzero|-ixy), no analysis is done and '-oclean' will force the cleaning and output of all files found.
+  * If you set the input file type (-izneg|-izzero|-ixy), '-oclean' will force the cleaning and output of all files found.
 * Convert between formats.
   * OpenGL to DirectX, standard to Z-zero, or vice versa. OpenGl-style is the default, use '-idx' to note that the input files are DirectX-style (does not affect heightfields), '-odx' to set that you want to output in DirectX-style.
   * To export to the Z-Zero format, where Z goes from 0 to 1 instead of -1 to 1, use '-ozzero'.
