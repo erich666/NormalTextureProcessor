@@ -197,6 +197,25 @@ void copyOneChannel(progimage_info* dst, int channel, progimage_info* src, LodeP
     }
 }
 
+void convertToGrayscale(progimage_info* dst, progimage_info* src, LodePNGColorType colortype)
+{
+    int row, col;
+    dst->width = src->width;
+    dst->height = src->height;
+    unsigned char* dst_data = &dst->image_data[0];
+    unsigned char* src_data = &src->image_data[0];
+    int channelIncrement = (colortype == LCT_RGB) ? 3 : 4;
+    for (row = 0; row < src->height; row++)
+    {
+        for (col = 0; col < src->width; col++)
+        {
+            // https://en.wikipedia.org/wiki/Grayscale#Luma_coding_in_video_systems
+            *dst_data++ = (unsigned char)((0.2126f * ((float)src_data[0] / 255.0f) + 0.7152f * ((float)src_data[0] / 255.0f) + 0.0722f * ((float)src_data[0] / 255.0f)) * 255.0f + 0.5f);
+            src_data += channelIncrement;
+        }
+    }
+}
+
 
 // to avoid defining boolean, etc., make this one return 1 if true, 0 if false
 int channelEqualsValue(progimage_info* src, int channel, int numChannels, unsigned char value, int ignoreGrayscale)

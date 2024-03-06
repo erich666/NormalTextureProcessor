@@ -45,6 +45,7 @@ void writepng_cleanup(progimage_info *mainprog_ptr);
 progimage_info* allocateGrayscaleImage(progimage_info* source_ptr);
 progimage_info* allocateRGBImage(progimage_info* source_ptr);
 void copyOneChannel(progimage_info* dst, int channel, progimage_info* src, LodePNGColorType colortype);
+void convertToGrayscale(progimage_info* dst, progimage_info* src, LodePNGColorType colortype);
 
 int channelEqualsValue(progimage_info* src, int channel, int numChannels, unsigned char value, int ignoreGrayscale);
 void changeValueToValue(progimage_info* src, int channel, int numChannels, unsigned char value, unsigned char newValue);
