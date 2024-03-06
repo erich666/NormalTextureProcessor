@@ -979,7 +979,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 		if (image_field_bits & IMAGE_ALL_SAME) {
 			image_type = IMAGE_TYPE_HEIGHTFIELD;
 			if (gOptions.analyze) {
-				std::wcout << "Image file '" << inputFile << "' is perhaps a heightfield.\n";
+				std::wcout << "Image file '" << inputFile << "' is perhaps a heightfield (or nothing - all texels are the same).\n";
 			}
 		}
 		// Were the X and Y coordinates reasonable or not?
@@ -993,14 +993,24 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 			image_type = IMAGE_TYPE_HEIGHTFIELD;
 			if (gOptions.analyze) {
 				std::wcout << "Image file '" << inputFile << "' is probably a heightfield texture.\n";
+				// why
+				if ((normalizable_xy[2] + normalizable_xy[1] + normalizable_xy[0]) < (1.0f - gOptions.errorTolerance) * image_size) {
+					std::wcout << "  Reason: there are many XY pairs that have a vector length notably longer than 1.0; " << 100.0f * (image_size - (normalizable_xy[2] + normalizable_xy[1] + normalizable_xy[0])) / (float)image_size << " percent.\n";
+				}
+				if (abs((float)(xsum / (double)image_size)) > gOptions.errorTolerance) {
+					std::wcout << "  Reason: the average value of X " << (float)(xsum / (double)image_size) << " is larger in magnitude than the error tolerance of " << gOptions.errorTolerance << ".\n";
+				}
+				if (abs((float)(ysum / (double)image_size)) > gOptions.errorTolerance) {
+					std::wcout << "  Reason: the average value of Y " << (float)(ysum / (double)image_size) << " is larger in magnitude than the error tolerance of " << gOptions.errorTolerance << ".\n";
+				}
 			}
 		}
 		else {
 			// Which interpretation of Z - zero or negative 1 minimum - gives a smaller difference in normal lengths computed?
 			// Alternate test: Which has fewer values outside the bounds?
-			//if (z_outside_bounds < z_outside_zzero_bounds) {
+			if (z_outside_bounds < z_outside_zzero_bounds) {
 			// Whichever it is, the input file could be a heightfield or a file with XY only. Right now we favor XY only, but that could be changed or modified with options.
-			if (maxnormallength - minnormallength <= zzero_maxnormallength - zzero_minnormallength) {
+			//if (maxnormallength - minnormallength <= zzero_maxnormallength - zzero_minnormallength) {
 				// More likely Z -1 to 1
 				// how much did the z value vary from expected?
 				// stricter: if (zmaxabsdiff > 2) {
@@ -1008,6 +1018,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 					image_type = IMAGE_TYPE_NORMAL_XY_ONLY;
 					if (gOptions.analyze) {
 						std::wcout << "Image file '" << inputFile << "' is probably an XY-only normals texture.\n";
+						std::wcout << "  Reason: the percentage of stored Z -1 to 1 values that do not make normalized XYZ vectors is " << 100.0f * (float)z_outside_bounds/(float)image_size << " percent,\n    larger than the error tolerance of " << 100.0f * gOptions.errorTolerance << " percent.\n";
 					}
 				}
 				else {
@@ -1015,15 +1026,19 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 					if (image_field_bits & IMAGE_VALID_ZVAL_NONNEG) {
 						if (gOptions.analyze) {
 							std::wcout << "Image file '" << inputFile << "' may be a standard normals texture.\n";
+							std::wcout << "  Reason: no Z -1 to 1 range values are negative.\n";
 						}
 					}
 					else {
 						// has negative Z values
 						if (gOptions.analyze) {
 							std::wcout << "Image file '" << inputFile << "' might be a standard normals texture.\n";
+							std::wcout << "  Reason: some Z -1 to 1 range values are negative.\n";
 						}
 					}
+					std::wcout << "  Reason: the percentage of stored Z -1 to 1 values that do not make normalized XYZ vectors is " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent,\n    smaller than the error tolerance of " << 100.0f * gOptions.errorTolerance << " percent.\n";
 				}
+				std::wcout << "    " << 100.0f * (float)(image_size - z_outside_bounds) / (float)image_size << " percent of Z's are valid for range -1 to 1, " << 100.0f * (float)(image_size - z_outside_zzero_bounds) / (float)image_size << " percent are valid for range 0 to 1\n";
 			}
 			else {
 				// More likely Z 0 to 1
@@ -1032,11 +1047,14 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 				if (z_outside_zzero_bounds > gOptions.errorTolerance * image_size) {
 					image_type = IMAGE_TYPE_NORMAL_XY_ONLY;
 					std::wcout << "Image file '" << inputFile << "' is probably an XY-only normals texture.\n";
+					std::wcout << "  Reason: the percentage of stored Z 0 to 1 values that do not make normalized XYZ vectors is " << 100.0f * (float)z_outside_zzero_bounds / (float)image_size << " percent,\n    larger than the error tolerance of " << 100.0f * gOptions.errorTolerance << " percent.\n";
 				}
 				else {
 					image_type = IMAGE_TYPE_NORMAL_ZERO;
 					std::wcout << "Image file '" << inputFile << "' may be a Z-zero normals texture, with Z ranging from 0.0 to 1.0.\n";
+					std::wcout << "  Reason: the percentage of stored Z 0 to 1 values that do not make normalized XYZ vectors is " << 100.0f * (float)z_outside_zzero_bounds / (float)image_size << " percent,\n    lower than the error tolerance of " << 100.0f * gOptions.errorTolerance << " percent.\n";
 				}
+				std::wcout << "    " << 100.0f * (float)(image_size - z_outside_zzero_bounds) / (float)image_size << " percent of Z's are valid for range 0 to 1, " << 100.0f * (float)(image_size - z_outside_bounds) / (float)image_size << " percent are valid for range -1 to 1\n";
 			}
 		}
 	}
@@ -1595,7 +1613,6 @@ void cleanAndCopyNormalTexture(progimage_info* dst, progimage_info* src, int ima
 			heatmap_b = 0;
 
 			// are X and Y invalid, forming a vector > 1.0 in length?
-			// TODOTODO check that this code gets hit.
 			float xy_len2 = x * x + y * y;
 			if (xy_len2 > 1.0f) {
 				heatmap_r = 255;
