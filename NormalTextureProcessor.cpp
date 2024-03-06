@@ -1787,7 +1787,7 @@ void cleanAndCopyNormalTexture(progimage_info* dst, progimage_info* src, int ima
 						diff = 255.0f;
 					}
 					heatmap_g = (unsigned char)diff;
-					if (src_data[1] <= 127) {
+					if (src_data[2] <= 127) {
 						// just barely negative, by one level; precision
 						heatmap_b = 255 - src_data[1];
 					}
