@@ -934,7 +934,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 					assert(image_field_bits & IMAGE_ALMOST2_VALID_NORMALS_FULL);
 					if (gOptions.analyze) {
 						std::wcout << "  The texture does not have all perfect z-values, but all Z's are within 2 levels of the expected value.\n";
-						std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent are perfectly normalized, " << 100.0f * (float)normal_length_zneg[1] / (float)image_size << " percent are just 1 away, and " << 100.0f * (float)normal_length_zneg[2] / (float)image_size << " percent are 2 away.\n";
+						std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent are perfectly normalized, " << 100.0f * (float)normal_length_zneg[1] / (float)image_size << " percent are just 1 level away, and " << 100.0f * (float)normal_length_zneg[2] / (float)image_size << " percent are 2 levels away.\n";
 					}
 				}
 			}
