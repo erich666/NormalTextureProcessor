@@ -1077,17 +1077,17 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 	if (!(image_field_bits & IMAGE_ALL_SAME)) {
 		if (image_field_bits & IMAGE_R_CHANNEL_ALL_SAME) {
 			if (gOptions.analyze) {
-				std::wcout << "  The red channel values in file '" << inputFile << "' all have the same value: " << first_pixel[0] << "\n";
+				std::wcout << "  The red channel values in file '" << inputFile << "' all have the same value: " << first_pixel[0] << ".\n";
 			}
 		}
 		if (image_field_bits & IMAGE_G_CHANNEL_ALL_SAME) {
 			if (gOptions.analyze) {
-				std::wcout << "  The green channel values in file '" << inputFile << "' all have the same value: " << first_pixel[1] << "\n";
+				std::wcout << "  The green channel values in file '" << inputFile << "' all have the same value: " << first_pixel[1] << ".\n";
 			}
 		}
 		if (image_field_bits & IMAGE_B_CHANNEL_ALL_SAME) {
 			if (gOptions.analyze) {
-				std::wcout << "  The blue channel values in file '" << inputFile << "' all have the same value: " << first_pixel[2] << "\n";
+				std::wcout << "  The blue channel values in file '" << inputFile << "' all have the same value: " << first_pixel[2] << ".\n";
 			}
 		}
 	}
@@ -1122,7 +1122,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 			std::wcout << "  XYZ values ranges, assuming Z -1 to 1:\n    X " << CONVERT_CHANNEL_FULL_DIRECT(chan_min[0]) << " to " << CONVERT_CHANNEL_FULL_DIRECT(chan_max[0])
 				<< "\n    Y " << CONVERT_CHANNEL_FULL_DIRECT(chan_min[1]) << " to " << CONVERT_CHANNEL_FULL_DIRECT(chan_max[1])
 				<< "\n    Z " << CONVERT_CHANNEL_FULL_DIRECT(chan_min[2]) << " to " << CONVERT_CHANNEL_FULL_DIRECT(chan_max[2]) << "\n";
-			std::wcout << "  Color channels range: r " << chan_min[0] << " to " << chan_max[0] << "; g " << chan_min[1] << " to " << chan_max[1] << "; b " << chan_min[2] << " to " << chan_max[2] << "\n";
+			std::wcout << "  Color channels range: r " << chan_min[0] << " to " << chan_max[0] << "; g " << chan_min[1] << " to " << chan_max[1] << "; b " << chan_min[2] << " to " << chan_max[2] << ".\n";
 			break;
 		case IMAGE_TYPE_NORMAL_ZERO:
 			must_clean |= XYanalysis(image_field_bits, image_size, normalizable_xy, xy_outside_bounds);
@@ -1132,7 +1132,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 			std::wcout << "  XYZ values ranges, assuming Z 0 to 1:\n    X " << CONVERT_CHANNEL_FULL_DIRECT(chan_min[0]) << " to " << CONVERT_CHANNEL_FULL_DIRECT(chan_max[0])
 				<< "\n    Y " << CONVERT_CHANNEL_FULL_DIRECT(chan_min[1]) << " to " << CONVERT_CHANNEL_FULL_DIRECT(chan_max[1])
 				<< "\n    Z " << CONVERT_CHANNEL_ZERO_DIRECT(chan_min[2]) << " to " << CONVERT_CHANNEL_ZERO_DIRECT(chan_max[2]) << "\n";
-			std::wcout << "  Color channels range: r " << chan_min[0] << " to " << chan_max[0] << "; g " << chan_min[1] << " to " << chan_max[1] << "; b " << chan_min[2] << " to " << chan_max[2] << "\n";
+			std::wcout << "  Color channels range: r " << chan_min[0] << " to " << chan_max[0] << "; g " << chan_min[1] << " to " << chan_max[1] << "; b " << chan_min[2] << " to " << chan_max[2] << ".\n";
 			break;
 		case IMAGE_TYPE_NORMAL_XY_ONLY:
 			must_clean |= XYanalysis(image_field_bits, image_size, normalizable_xy, xy_outside_bounds);
@@ -1144,22 +1144,22 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 			std::wcout << "  X and Y values ranges:\n    X " << CONVERT_CHANNEL_FULL_DIRECT(chan_min[0]) << " to " << CONVERT_CHANNEL_FULL_DIRECT(chan_max[0])
 				<< "\n    Y " << CONVERT_CHANNEL_FULL_DIRECT(chan_min[1]) << " to " << CONVERT_CHANNEL_FULL_DIRECT(chan_max[1]) << "\n";
 			std::wcout << "  Average input Z channel values, if mapped from -1 to 1: " << (float)(zsum / (double)image_size) << "\n";
-			std::wcout << "  Color channels range: r " << chan_min[0] << " to " << chan_max[0] << "; g " << chan_min[1] << " to " << chan_max[1] << "; b " << chan_min[2] << " to " << chan_max[2] << "\n";
+			std::wcout << "  Color channels range: r " << chan_min[0] << " to " << chan_max[0] << "; g " << chan_min[1] << " to " << chan_max[1] << "; b " << chan_min[2] << " to " << chan_max[2] << ".\n";
 			break;
 		case IMAGE_TYPE_HEIGHTFIELD:
 			if (image_field_bits & IMAGE_ALL_SAME) {
 				if (image_field_bits & IMAGE_GRAYSCALE) {
-					std::wcout << "  All values are the same (heights do not vary): r = " << first_pixel[0] << ", g = " << first_pixel[1] << ", b = " << first_pixel[2] << "\n";
+					std::wcout << "  All values are the same (heights do not vary): r = " << first_pixel[0] << ", g = " << first_pixel[1] << ", b = " << first_pixel[2] << ".\n";
 				}
 				else {
 					// gray computed earlier, same for all
-					std::wcout << "  All values are the same (heights do not vary): gray level is " << gray << " from r = " << first_pixel[0] << ", g = " << first_pixel[1] << ", b = " << first_pixel[2] << "\n";
+					std::wcout << "  All values are the same (heights do not vary): gray level is " << gray << " from r = " << first_pixel[0] << ", g = " << first_pixel[1] << ", b = " << first_pixel[2] << ".\n";
 				}
 			}
 			else {
 				std::wcout << "  Gray-level values vary between " << gray_min << " and " << gray_max << ".\n";
 				if (!(image_field_bits & IMAGE_GRAYSCALE)) {
-					std::wcout << "  Color channels vary: r " << chan_min[0] << " to " << chan_max[0] << "; g " << chan_min[1] << " to " << chan_max[1] << "; b " << chan_min[2] << " to " << chan_max[2] << "\n";
+					std::wcout << "  Color channels vary: r " << chan_min[0] << " to " << chan_max[0] << "; g " << chan_min[1] << " to " << chan_max[1] << "; b " << chan_min[2] << " to " << chan_max[2] << ".\n";
 				}
 			}
 			// if must_clean is set, then we're not sure this is a heightfield texture, so show X and Y's
@@ -1357,10 +1357,10 @@ bool Zanalysis(int image_type, int image_field_bits, int image_size, int *normal
 		else {
 			must_clean = true;
 			if (image_field_bits & IMAGE_ALMOST_VALID_NORMALS_FULL) {
-				std::wcout << "  The texture does not have all perfect z-values,\n    but all Z's are within 1 level of the expected values.\n  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent of the XYZ normals are perfectly normalized.\n";
+				std::wcout << "  Some texels do not have perfect z-values,\n    but all Z's are within 1 level of the expected values.\n  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent of the XYZ normals are perfectly normalized.\n";
 			}
 			else if (image_field_bits & IMAGE_ALMOST2_VALID_NORMALS_FULL) {
-				std::wcout << "  The texture does not have all perfect z-values,\n    but all Z's are within 2 levels of the expected values.\n";
+				std::wcout << "  Some texels do not have perfect z-values,\n    but all Z's are within 2 levels of the expected values.\n";
 				std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent of the XYZ normals are perfectly normalized,\n    "
 					<< 100.0f * (float)normal_length_zneg[1] / (float)image_size << " percent are just 1 level away, and\n    "
 					<< 100.0f * (float)normal_length_zneg[2] / (float)image_size << " percent are 2 levels away.\n";
@@ -1393,10 +1393,10 @@ bool Zanalysis(int image_type, int image_field_bits, int image_size, int *normal
 		else {
 			must_clean = true;
 			if (image_field_bits & IMAGE_ALMOST_VALID_NORMALS_ZERO) {
-				std::wcout << "  The texture does not have all perfect z-values,\n    but all Z's are within 1 level of the expected values.\n  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent of the XYZ normals are perfectly normalized.\n";
+				std::wcout << "  Some texels do not have perfect z-values,\n    but all Z's are within 1 level of the expected values.\n  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent of the XYZ normals are perfectly normalized.\n";
 			}
 			else if (image_field_bits & IMAGE_ALMOST2_VALID_NORMALS_ZERO) {
-				std::wcout << "  The texture does not have all perfect z-values,\n    but all Z's are within 2 levels of the expected values.\n";
+				std::wcout << "  Some texels do not have perfect z-values,\n    but all Z's are within 2 levels of the expected values.\n";
 				std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent of the XYZ normals are perfectly normalized,\n    " 
 					<< 100.0f * (float)normal_length_zneg[1] / (float)image_size << " percent are just 1 level away, and\n    " 
 					<< 100.0f * (float)normal_length_zneg[2] / (float)image_size << " percent are 2 levels away.\n";
