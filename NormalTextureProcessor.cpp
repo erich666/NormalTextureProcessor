@@ -916,12 +916,12 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 		image_type = IMAGE_TYPE_NORMAL_FULL;
 		if (image_field_bits & IMAGE_ALL_SAME) {
 			if (gOptions.analyze) {
-				std::wcout << "Image file '" << inputFile << "' is a normals texture, but all values are the same (normals do not vary).\n  r = " << first_pixel[0] << ", g = " << first_pixel[1] << ", b = " << first_pixel[2] << "; X = " << x << ", Y = " << y << ", Z = " << z << "\n";
+				std::wcout << "Image file '" << inputFile << "' is a standard normals texture, but all values are the same (normals do not vary).\n  r = " << first_pixel[0] << ", g = " << first_pixel[1] << ", b = " << first_pixel[2] << "; X = " << x << ", Y = " << y << ", Z = " << z << "\n";
 			}
 		}
 		else {
 			if (gOptions.analyze) {
-				std::wcout << "Image file '" << inputFile << "' is a normals texture.\n";
+				std::wcout << "Image file '" << inputFile << "' is a standard normals texture.\n";
 			}
 			if (!(image_field_bits & IMAGE_VALID_NORMALS_FULL)) {
 				must_clean = true;
@@ -956,13 +956,13 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 		if (image_field_bits & IMAGE_ALL_SAME) {
 			// really, we should never reach here - the similar code above should flag first.
 			if (gOptions.analyze) {
-				std::wcout << "Image file '" << inputFile << "' is a normals texture with Z ranging from 0.0 to 1.0, but all values are the same (normals do not vary).\n  r = " << first_pixel[0] << ", g = " << first_pixel[1] << ", b = " << first_pixel[2] << "; X = " << x << ", Y = " << y << ", Z - zero = " << zzero << "\n";
+				std::wcout << "Image file '" << inputFile << "' is a Z-zero normals texture, with Z ranging from 0.0 to 1.0, but all values are the same (normals do not vary).\n  r = " << first_pixel[0] << ", g = " << first_pixel[1] << ", b = " << first_pixel[2] << "; X = " << x << ", Y = " << y << ", Z - zero = " << zzero << "\n";
 			}
 			assert(0);
 		}
 		else {
 			if (gOptions.analyze) {
-				std::wcout << "Image file '" << inputFile << "' is a normals texture with Z ranging from 0.0 to 1.0.\n";
+				std::wcout << "Image file '" << inputFile << "' is a Z-zero normals texture, with Z ranging from 0.0 to 1.0.\n";
 			}
 			if (!(image_field_bits & IMAGE_VALID_NORMALS_ZERO)) {
 				must_clean = true;
@@ -1046,7 +1046,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 					// note this is also true gOptions.allowNegativeZ is true
 					if (image_field_bits & IMAGE_VALID_ZVAL_NONNEG) {
 						if (gOptions.analyze) {
-							std::wcout << "Image file '" << inputFile << "' may be a normals texture,\n";
+							std::wcout << "Image file '" << inputFile << "' may be a standard normals texture,\n";
 							std::wcout << "  with the X and Y coordinates forming vectors of length 1.0+epsilon or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
 							std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texel Z values are more than 2 levels from being properly normalized.\n";
 							std::wcout << "  The z value was found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
@@ -1054,7 +1054,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 					}
 					else {
 						if (gOptions.analyze) {
-							std::wcout << "Image file '" << inputFile << "' might be a normals texture,\n";
+							std::wcout << "Image file '" << inputFile << "' might be a standard normals texture,\n";
 							std::wcout << "  with the X and Y coordinates forming vectors of length 1.0+epsilon or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
 							std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texel Z values are more than 2 levels from being properly normalized.\n";
 							std::wcout << "  The z value was found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
@@ -1079,7 +1079,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 				else {
 					image_type = IMAGE_TYPE_NORMAL_ZERO;
 					if (gOptions.analyze) {
-						std::wcout << "Image file '" << inputFile << "' may be a normals texture with Z ranging from 0.0 to 1.0,\n";
+						std::wcout << "Image file '" << inputFile << "' may be a Z-zero normals texture, with Z ranging from 0.0 to 1.0,\n";
 						std::wcout << "  with the X and Y coordinates forming vectors of length 1.0+epsilon or less for " << 100.0f * (float)(normalizable_xy[0] + normalizable_xy[1] + normalizable_xy[2]) / (float)image_size << " percent of the texels.\n";
 						std::wcout << "  " << 100.0f * (float)z_outside_zzero_bounds / (float)image_size << " percent of the texel Z values are more than two from being properly normalized.\n";
 						std::wcout << "  The z value (assuming range 0 to 1) was found to be as far off as " << zmaxabsdiff_zero << " levels in expected value.\n";
