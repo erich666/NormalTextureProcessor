@@ -153,6 +153,7 @@ struct Options {
 	bool csvAll;
 	bool csvErrors;
 	float errorTolerance;
+	float errorToleranceXY;
 	//bool roundtrip;
 };
 
@@ -270,6 +271,7 @@ int wmain(int argc, wchar_t* argv[])
 	gOptions.csvAll = false;
 	gOptions.csvErrors = false;
 	gOptions.errorTolerance = 0.02f;
+	gOptions.errorToleranceXY = 0.10f;
 	//gOptions.roundtrip = false;
 
 	std::vector<std::wstring> fileList;
@@ -368,6 +370,17 @@ int wmain(int argc, wchar_t* argv[])
 			}
 			// turn percent tolerance into 0-1 range value
 			gOptions.errorTolerance *= 0.01f;
+		}
+		else if (wcscmp(argv[argLoc], L"-etolxy") == 0)
+		{
+			// heightfield scale float value
+			INC_AND_TEST_ARG_INDEX(argLoc);
+			swscanf_s(argv[argLoc], L"%f", &gOptions.errorToleranceXY);
+			if (gOptions.errorToleranceXY < 0.0f || gOptions.errorToleranceXY > 1.0f) {
+				std::wcerr << "ERROR: error tolerance XY magnitude must be between 0.0 and 1.0.\n";
+				printHelp();
+				return 1;
+			}
 		}
 		else if (wcscmp(argv[argLoc], L"-v") == 0)
 		{
@@ -1001,7 +1014,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 		// If less than 95% of XY's were reasonable, consider the thing likely to be a heightfield
 		else if ((normalizable_xy[2] + normalizable_xy[1] + normalizable_xy[0]) < (1.0f - gOptions.errorTolerance) * image_size ||
 			// OR, if the average of the X values > 0.02 or Y value > 0.02, it seems like a weirdly biased normal map
-			(abs((float)(xsum / (double)image_size)) > gOptions.errorTolerance || abs((float)(ysum / (double)image_size)) > gOptions.errorTolerance)) {
+			(abs((float)(xsum / (double)image_size)) > gOptions.errorToleranceXY || abs((float)(ysum / (double)image_size)) > gOptions.errorToleranceXY)) {
 
 			// the X and Y values are out of range, so assume it's a heightfield
 			image_type = IMAGE_TYPE_HEIGHTFIELD;
@@ -1011,11 +1024,11 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 				if ((normalizable_xy[2] + normalizable_xy[1] + normalizable_xy[0]) < (1.0f - gOptions.errorTolerance) * image_size) {
 					std::wcout << "  Reason: there are many XY pairs that have a vector length notably longer than 1.0; " << 100.0f * (image_size - (normalizable_xy[2] + normalizable_xy[1] + normalizable_xy[0])) / (float)image_size << " percent.\n";
 				}
-				if (abs((float)(xsum / (double)image_size)) > gOptions.errorTolerance) {
-					std::wcout << "  Reason: the average value of X " << (float)(xsum / (double)image_size) << " is larger in magnitude than the error tolerance of " << gOptions.errorTolerance << ".\n";
+				if (abs((float)(xsum / (double)image_size)) > gOptions.errorToleranceXY) {
+					std::wcout << "  Reason: the average value of X " << (float)(xsum / (double)image_size) << " is larger in magnitude than the XY error tolerance of " << gOptions.errorToleranceXY << ".\n";
 				}
-				if (abs((float)(ysum / (double)image_size)) > gOptions.errorTolerance) {
-					std::wcout << "  Reason: the average value of Y " << (float)(ysum / (double)image_size) << " is larger in magnitude than the error tolerance of " << gOptions.errorTolerance << ".\n";
+				if (abs((float)(ysum / (double)image_size)) > gOptions.errorToleranceXY) {
+					std::wcout << "  Reason: the average value of Y " << (float)(ysum / (double)image_size) << " is larger in magnitude than the XY error tolerance of " << gOptions.errorToleranceXY << ".\n";
 				}
 			}
 		}
@@ -1150,6 +1163,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 			std::wcout << "  X and Y values ranges:\n    X " << CONVERT_CHANNEL_FULL_DIRECT(chan_min[0]) << " to " << CONVERT_CHANNEL_FULL_DIRECT(chan_max[0])
 				<< "\n    Y " << CONVERT_CHANNEL_FULL_DIRECT(chan_min[1]) << " to " << CONVERT_CHANNEL_FULL_DIRECT(chan_max[1]) << "\n";
 			std::wcout << "  Average input Z channel values, if mapped from -1 to 1: " << (float)(zsum / (double)image_size) << "\n";
+			std::wcout << "    and Z would range from " << CONVERT_CHANNEL_FULL_DIRECT(chan_min[2]) << " to " << CONVERT_CHANNEL_FULL_DIRECT(chan_max[2]) << "\n";
 			std::wcout << "  Color channels range: r " << chan_min[0] << " to " << chan_max[0] << "; g " << chan_min[1] << " to " << chan_max[1] << "; b " << chan_min[2] << " to " << chan_max[2] << ".\n";
 			break;
 		case IMAGE_TYPE_HEIGHTFIELD:
@@ -1448,6 +1462,7 @@ void printHelp()
 	std::wcerr << "  -hfs # - for heightfields, specify output scale.\n";
 	std::wcerr << "  -hborder - treat heightfields as having a border (instead of wrapping around) when converting to a normals texture.\n";
 	std::wcerr << "  -etol # - when classifying a texture, what percentage of texels can fail. Default tolerance is 2 percent.\n";
+	std::wcerr << "  -etolxy # - when classifying a texture, how much the X and Y component averages can differ from 0. Default 0.10.\n";
 	std::wcerr << "  -csv - output all texel values and possible conversions to a comma-separated value file (for a spreadsheet).\n";
 	std::wcerr << "  -csve - output only texel values far out of range to a comma-separated value file (for a spreadsheet).\n";
 	std::wcerr << "  -v - verbose, explain everything going on. Default: display only warnings and errors.\n";

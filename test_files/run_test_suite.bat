@@ -39,4 +39,4 @@ set NTP_EXE="..\x64\Release\NormalTextureProcessor.exe"
 @rem export to CSV, dumping all pixels
 %NTP_EXE% -idir NoneOfTheAbove -odir output_CSV -a -v fade.png -csv -ixy
 
-@rem TODO: Flag currently not tested here, due to a lack of bad test data: -allownegz
+@rem TODO: Flag currently not tested here, due to a lack of bad test data: -allownegz -etolxy
