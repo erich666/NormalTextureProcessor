@@ -183,6 +183,7 @@ bool Zanalysis(int image_type, int image_field_bits, int image_size, int* normal
 void reportReadError(int rc, const wchar_t* filename);
 void saveErrorForEnd();
 
+//bool examineForDirectXStyle(progimage_info* src);
 void convertHeightfieldToXYZ(progimage_info* dst, progimage_info* src, float heightfieldScale, bool input_grayscale, bool y_flip, bool clamp_border);
 void cleanAndCopyNormalTexture(progimage_info* dst, progimage_info* src, int image_type, bool output_zzero, bool y_flip, bool heatmap);
 
@@ -1093,6 +1094,11 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 	}
 
 	if (gOptions.analyze) {
+		// try to examine X and Y fluctuations to determine if this is OpenGL or DirectX style.
+		// Sadly, this idea doesn't seem to work - it's a coin-flip.
+		//if (image_type != IMAGE_TYPE_HEIGHTFIELD) {
+		//	examineForDirectXStyle(&imageInfo);
+		//}
 
 		if (image_type == IMAGE_TYPE_NORMAL_FULL || image_type == IMAGE_TYPE_NORMAL_ZERO) {
 			if (image_field_bits & IMAGE_ALL_SAME) {
@@ -1508,6 +1514,100 @@ void saveErrorForEnd()
 }
 
 //================================ Image Manipulation ====================================
+
+// My theory was that if we looked for peaks/valleys vs. "cusps" (peak in one direction, valley in another)
+// that there would be more peaks/valleys for OpenGL-style, cusps for DirectX style.
+// Imagine a simple bump with a single peak in an OpenGL-style texture. That peak would look like a cusp
+// if we interpreted the texture as a DirectX texture.
+// Unfortunately, this doesn't work.
+// TODO: another idea is to unscramble the normal map to get a height map. In that process I can imagine
+// that the range of elevations is lower for the correct style than for the opposite style.
+//bool examineForDirectXStyle(progimage_info* src)
+//{
+//	int row, col;
+//	unsigned char* src_data = &src->image_data[0];
+//	bool clamp_border = false;
+//
+//	float* gridx = (float*)malloc(src->height * src->width * sizeof(float));
+//	float* gridy = (float*)malloc(src->height * src->width * sizeof(float));
+//	int index = 0;
+//
+//	// populate grid with converted values
+//	for (row = 0; row < src->height; row++)
+//	{
+//		for (col = 0; col < src->width; col++)
+//		{
+//			CONVERT_CHANNEL_TO_FULL(src_data[0], gridx[index]);
+//			CONVERT_CHANNEL_TO_FULL(src_data[1], gridy[index]);
+//
+//			// next texel
+//			src_data += 3;
+//			index++;
+//		}
+//	}
+//
+//	// now look at values: is a texel a peak, valley, or cusp?
+//	int parabola = 0;
+//	int hyperbola = 0;
+//	for (row = 0; row < src->height; row++)
+//	{
+//		// Ensure value is not negative by adding height to trow
+//		int trow = (row + src->height - 1) % src->height;
+//		int brow = (row + 1) % src->height;
+//		if (clamp_border) {
+//			// undo the wraps if we want to clamp to the border
+//			if (trow >= src->height - 1)
+//				trow = 0;
+//			if (brow == 0)
+//				brow = src->height - 1;
+//		}
+//		for (col = 0; col < src->width; col++)
+//		{
+//			bool xpeak = false;
+//			bool xvalley = false;
+//			bool ypeak = false;
+//			bool yvalley = false;
+//			int lcol = (col + src->width - 1) % src->width;
+//			int rcol = (col + 1) % src->width;
+//			if (clamp_border) {
+//				// undo the wraps if we want to clamp to the border
+//				if (lcol >= src->width - 1)
+//					lcol = 0;
+//				if (rcol == 0)
+//					rcol = src->width - 1;
+//			}
+//			if (gridx[row * src->width + col] > gridx[row * src->width + lcol] &&
+//				gridx[row * src->width + col] > gridx[row * src->width + rcol]) {
+//				xpeak = true;
+//			}
+//			else if (gridx[row * src->width + col] < gridx[row * src->width + lcol] &&
+//				gridx[row * src->width + col] < gridx[row * src->width + rcol]) {
+//				xvalley = true;
+//			}
+//			if (gridy[row * src->width + col] > gridy[trow * src->width + col] &&
+//				gridy[row * src->width + col] > gridy[brow * src->width + col]) {
+//				ypeak = true;
+//			}
+//			else if (gridy[row * src->width + col] < gridy[trow * src->width + col] &&
+//				gridy[row * src->width + col] < gridy[brow * src->width + col]) {
+//				yvalley = true;
+//			}
+//
+//			// did we get a parabola or hyperbola?
+//			if ((xpeak && ypeak) || (xvalley && yvalley)) {
+//				parabola++;
+//			}
+//			else if ((xpeak && yvalley) || (xvalley && ypeak)) {
+//				hyperbola++;
+//			}
+//
+//			// next texel
+//			index++;
+//		}
+//	}
+//	std::wcout << "  I think it's a " << ((parabola >= hyperbola) ? "OpenGL-style" : "DirectX-style") << " normals texture because parabola = " << parabola << " and hyperbola = " << hyperbola << "\n";
+//	return parabola >= hyperbola;
+//}
 
 // assumes 3 channels are input
 void convertHeightfieldToXYZ(progimage_info* dst, progimage_info* src, float heightfieldScale, bool input_grayscale, bool y_flip, bool clamp_border)
