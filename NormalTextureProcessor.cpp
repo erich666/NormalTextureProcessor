@@ -1606,6 +1606,8 @@ void saveErrorForEnd()
 //		}
 //	}
 //	std::wcout << "  I think it's a " << ((parabola >= hyperbola) ? "OpenGL-style" : "DirectX-style") << " normals texture because parabola = " << parabola << " and hyperbola = " << hyperbola << "\n";
+//	free(gridx);
+//	free(gridy);
 //	return parabola >= hyperbola;
 //}
 
