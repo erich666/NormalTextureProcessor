@@ -105,7 +105,7 @@ x = ((float)r / 255.0f) * 2.0f - 1.0f;
 y = ((float)g / 255.0f) * 2.0f - 1.0f;
 z = ((float)b / 255.0f) * 2.0f - 1.0f;
 ```
-In [UsdPreviewSurface](https://openusd.org/release/spec_usdpreviewsurface.html#texture-reader) terms, the 2.0f is the scale, the -1.0f is the bias.
+In [UsdPreviewSurface](https://openusd.org/release/spec_usdpreviewsurface.html#texture-reader) terms, the 2.0f is the scale, the -1.0f is the bias. Note that the RGB triplet is assumed to map directly to linear values -1.0 through 1.0, there's no sRGB version or similar. In other words, the data is considered to be "just numbers" and not some gamma-corrected color.
 
 If you want to go to the range 0.0 to 1.0, it's simpler still. Here's Z:
 ```sh
@@ -211,5 +211,5 @@ Potential tasks (no promises!):
 - [ ] Figure out way (if any) to tell if a texture is OpenGL or DirectX oriented. I suspect there's some curvature analysis, perhaps converting into a heightfield, that could be done. For example, take differences between texels horizontally and vertically and see the correspondence - bumps are more likely than hyperboloids. Or maybe it's not possible (well, it certainly isn't if there's no Y variance).
 - [ ] Convert back from normals textures to heightfields. Not sure this is useful (nor how to do it, exactly), but might be worth adding, for visualization and analysis.
 - [ ] Ignore texels that are black or white (probably unused in texture, except for heightfields). Adjust statistics, CSV output, etc.
-- [ ] Support 16-bit PNG files fully, input and output.
+- [ ] Support 16-bit PNG files fully, input and output. Also properly convert channel values that have less than 8 bits.
 - [ ] Ignore pixels with alpha values of 0.

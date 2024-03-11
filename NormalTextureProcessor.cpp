@@ -612,6 +612,25 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 		return rc_output;
 	}
 
+	// see how many bits etc. the input PNG has (if it's a PNG);
+	int bitdepth = 8;
+	LodePNGColorType colortype = LCT_RGB;
+	if (file_type == PNG_EXTENSION_FOUND) {
+		std::vector<unsigned char> buffer;
+		if (lodepng::load_file(buffer, inputPathAndFile) == 0) {
+			unsigned w, h;
+			lodepng::State state;
+			lodepng_inspect(&w, &h, &state, &buffer[0], buffer.size());
+			bitdepth = state.info_png.color.bitdepth;
+			colortype = state.info_png.color.colortype;
+		}
+		else {
+			// what? We just loaded the file earlier
+			std::wcerr << "ERROR: file " << inputFile << "' could not be read to get its header information.\n" << std::flush;
+			return 0;
+		}
+	}
+
 	// All the things to test:
 	// Are all the pixels the same color? If so, no normals data, no matter what format.
 	//   Is this same color the "blue" of 127/127/255? Note it's a "proper" normal map format, but no real data.
@@ -1086,6 +1105,16 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 		}
 	}
 	assert(image_type);
+
+	// warn about color depth mismatch
+	if (colortype == LCT_RGB || colortype == LCT_RGBA) {
+		if (bitdepth > 8) {
+			std::wcout << "  WARNING: input file has " << bitdepth << " bits of precision per channel, but this program currently outputs only 8 bits per channel.\n";
+		}
+		else if (bitdepth < 8) {
+			std::wcout << "  WARNING: input file has " << bitdepth << " bits of precision per channel, but this program currently uses 8 bits per channel. Conversion may be off.\n";
+		}
+	}
 
 	// additional info for if particular channels are constant
 	if (!(image_field_bits & IMAGE_ALL_SAME)) {
