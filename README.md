@@ -61,9 +61,9 @@ The second type of normals texture, what I call "Z-zero", maps the 0 to 255 8-bi
 
 Another problem sometimes seen with both types of normals texture is that just the X and Y values (ignoring Z) form a vector that is longer than 1.0. This can happen due to (poor) resizing or filtering of normals textures, slightly incorrect conversion formulas, or who knows what else. The analysis notes how many (X,Y) vectors are too long.
 
-The first two types, "standard" and "Z-zero", map red and green to X and Y in the same way, with the possible reversal of Y for the DirectX style texture. Given that Z cannot be a negative value (for most applications), some applications forego saving a Z value channel at all. The Z value is simply derived by sqrt(1.0 - (X\*X + Y\*Y)). For example, the [LabPBR Material](https://shaderlabs.org/wiki/LabPBR_Material_Standard) used for Minecraft modding specifies the texture holding normals as X and Y in red and green (in DirectX format), ambient occlusion is stored in the blue channel, and alpha holds the heightfield texture. The analyze mode attempts to identify these types of textures by looking at the Z values and see if they act as normals or are independent values. These are called "XY-only" textures in the analysis report.
+The first two types, "standard" and "Z-zero", map red and green to X and Y in the same way, with the possible reversal of Y for the DirectX style texture. Given that Z cannot be a negative value (for most applications), some applications forego saving a Z value channel at all. The Z value is simply derived by sqrt(1.0 - (X\*X + Y\*Y)). For example, the [LabPBR Material](https://shaderlabs.org/wiki/LabPBR_Material_Standard) used for Minecraft modding specifies the texture holding normals as X and Y in red and green (in DirectX format), ambient occlusion is stored in the blue channel, and alpha holds the heightfield texture. The analyze mode attempts to identify these types of textures by looking at the Z values and see if the vector XYZ forms unit (length of 1.0) normals or if the Z's are independent values. If the latter, these normals textures are called "XY-only" textures in the analysis report.
 
-A few heuristics are used to classify textures that don't clearly fall into a single category. The analysis will give one or more reasons why a texture is categorized as a particular type. Two tolerances, -etol and -etolxy, can be adjusted to be less or more strict as to what falls in a category. The '-etol' option specifies a percentage of normal lengths that can be a fair bit far from 1.0 before the texture is categorized as not being a standard normals texture. The '-etolxy' option gives how much the average of the X or Y values can vary from 0.0, which is usually the average for most normals textures formed.
+A few heuristics are used to classify textures that don't clearly fall into a single category. The analysis will give one or more reasons why a texture is categorized as a particular type. Two tolerances, -etol and -etolxy, can be adjusted to be less or more strict as to what falls in a category. The '-etol' option specifies a percentage of normal lengths that can be a fair bit far from 1.0 before the texture is categorized as not being a standard normals texture. The '-etolxy' option gives how much the average of all of the X or Y values can vary from 0.0, which is usually the average for most normals textures formed. If these averages are off by more than 0.1 (the default), the input image may not even be an XY texture.
 
 The third type of normals texture is a heightfield texture, often called a bump or height map. The format is usually a single channel (such as the red channel) or a grayscale image. Black is usually the lowest level, white the highest elevation. Analysis tries some basic testing to see if a texture may be a heightfield texture. Heightfield textures are often used to create normals textures, e.g., [GIMP has this functionality](https://docs.gimp.org/en/gimp-filter-normal-map.html). There is a scale (not stored in the image) that needs to be provided for the heightfield so that the conversion can be done. I have occasionally seen heightmap textures get intermingled with normals textures, so try to identify these.
 
@@ -195,6 +195,7 @@ Some resources I've found useful:
 * [UsdPreviewSurface](https://openusd.org/release/spec_usdpreviewsurface.html#texture-reader) - the USD specification's basic material. Search on "normal3f" to see more about how to specify it.
 * [glTF 2.0 specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html) - has much about normals textures.
 * [GIMP conversion](https://docs.gimp.org/en/gimp-filter-normal-map.html) - how to make normals textures from heightfields in GIMP.
+* [_Survey of Efficient Representations for Independent Unit Vectors_|https://jcgt.org/published/0003/02/01/] - Storing normals as XYZ triplets is wasteful, since Z could just be computed from X and Y in most usages. Even storing just X and Y gives pairs of numbers that are unusable, forming vectors longer than 1.0, and the precision is poorly distributed for the rest. This paper and code gives some better alternate representations.
 
 ## License
 
@@ -202,7 +203,7 @@ MIT license. See the [LICENSE](https://github.com/erich666/NormalTextureProcesso
 
 ## Acknowledgements
 
-Thanks to Nick Porcino for the quick check on my conversion equations. Thanks to Koen Vroeijenstijn for discussions about 16-bit PNG formats.
+Thanks to Nick Porcino for the quick check on my conversion equations. Thanks to Koen Vroeijenstijn for discussions about 16-bit PNG formats, and John Stone for even higher precision representations.
 
 ## Roadmap
 

@@ -726,6 +726,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 	int gray = 0;	// initialized to make the compiler happy
 	//int ignore_normal_texel_count = 0;
 
+	int b_less_than_255 = 0;
 	for (row = 0; row < imageInfo.height; row++)
 	{
 		for (col = 0; col < imageInfo.width; col++)
@@ -758,7 +759,10 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 					chan_max[channel] = src_data[channel];
 				}
 			}
-			
+			if (src_data[2] != 255) {
+				b_less_than_255++;
+			}
+
 			// heightfield height range
 			COMPUTE_GRAY_FROM_RGB(src_data[0], src_data[1], src_data[2], gray);
 			if (gray_min > gray) {
@@ -943,7 +947,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 	if (normal_length_zneg[2] + normal_length_zneg[1] + normal_length_zneg[0] == image_size) {
 		image_field_bits |= IMAGE_ALMOST2_VALID_NORMALS_FULL;
 	}
-	if (!gOptions.allowNegativeZ || (normal_zval_nonnegative == image_size)) {
+	if (gOptions.allowNegativeZ || (normal_zval_nonnegative == image_size)) {
 		image_field_bits |= IMAGE_VALID_ZVAL_NONNEG;
 	}
 	if (normal_length_zzero[0] == image_size) {
@@ -1041,7 +1045,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 				std::wcout << "Image file '" << inputFile << "' is probably a heightfield texture.\n";
 				// why
 				if ((normalizable_xy[2] + normalizable_xy[1] + normalizable_xy[0]) < (1.0f - gOptions.errorTolerance) * image_size) {
-					std::wcout << "  Reason: there are many XY pairs that have a vector length notably longer than 1.0; " << 100.0f * (image_size - (normalizable_xy[2] + normalizable_xy[1] + normalizable_xy[0])) / (float)image_size << " percent.\n";
+					std::wcout << "  Reason: there are many XY pairs that have a vector length notably longer than 1.0; " << 100.0f * (image_size - (normalizable_xy[2] + normalizable_xy[1] + normalizable_xy[0])) / (float)image_size << "%.\n";
 				}
 				if (abs((float)(xsum / (double)image_size)) > gOptions.errorToleranceXY) {
 					std::wcout << "  Reason: the average value of X " << (float)(xsum / (double)image_size) << " is larger in magnitude than the XY error tolerance of " << gOptions.errorToleranceXY << ".\n";
@@ -1064,7 +1068,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 					image_type = IMAGE_TYPE_NORMAL_XY_ONLY;
 					if (gOptions.analyze) {
 						std::wcout << "Image file '" << inputFile << "' is probably an XY-only normals texture.\n";
-						std::wcout << "  Reason: the percentage of stored Z -1 to 1 values that do not make normalized XYZ vectors is " << 100.0f * (float)z_outside_bounds/(float)image_size << " percent,\n    larger than the error tolerance of " << 100.0f * gOptions.errorTolerance << " percent.\n";
+						std::wcout << "  Reason: the percentage of stored Z -1 to 1 values that do not make normalized XYZ vectors is " << 100.0f * (float)z_outside_bounds/(float)image_size << "%,\n    larger than the error tolerance of " << 100.0f * gOptions.errorTolerance << "%.\n";
 					}
 				}
 				else {
@@ -1082,9 +1086,9 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 							std::wcout << "  Reason: some Z -1 to 1 range values are negative.\n";
 						}
 					}
-					std::wcout << "  Reason: the percentage of stored Z -1 to 1 values that do not make normalized XYZ vectors is " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent,\n    smaller than the error tolerance of " << 100.0f * gOptions.errorTolerance << " percent.\n";
+					std::wcout << "  Reason: the percentage of stored Z -1 to 1 values that do not make normalized XYZ vectors is " << 100.0f * (float)z_outside_bounds / (float)image_size << "%,\n    smaller than the error tolerance of " << 100.0f * gOptions.errorTolerance << "%.\n";
 				}
-				std::wcout << "    " << 100.0f * (float)(image_size - z_outside_bounds) / (float)image_size << " percent of Z's are valid for range -1 to 1, " << 100.0f * (float)(image_size - z_outside_zzero_bounds) / (float)image_size << " percent are valid for range 0 to 1.\n";
+				std::wcout << "    " << 100.0f * (float)(image_size - z_outside_bounds) / (float)image_size << "% of Z's are valid for range -1 to 1, " << 100.0f * (float)(image_size - z_outside_zzero_bounds) / (float)image_size << "% are valid for range 0 to 1.\n";
 			}
 			else {
 				// More likely Z 0 to 1
@@ -1093,14 +1097,14 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 				if (z_outside_zzero_bounds > gOptions.errorTolerance * image_size) {
 					image_type = IMAGE_TYPE_NORMAL_XY_ONLY;
 					std::wcout << "Image file '" << inputFile << "' is probably an XY-only normals texture.\n";
-					std::wcout << "  Reason: the percentage of stored Z 0 to 1 values that do not make normalized XYZ vectors is " << 100.0f * (float)z_outside_zzero_bounds / (float)image_size << " percent,\n    larger than the error tolerance of " << 100.0f * gOptions.errorTolerance << " percent.\n";
+					std::wcout << "  Reason: the percentage of stored Z 0 to 1 values that do not make normalized XYZ vectors is " << 100.0f * (float)z_outside_zzero_bounds / (float)image_size << "%,\n    larger than the error tolerance of " << 100.0f * gOptions.errorTolerance << "%.\n";
 				}
 				else {
 					image_type = IMAGE_TYPE_NORMAL_ZERO;
 					std::wcout << "Image file '" << inputFile << "' may be a Z-zero normals texture, with Z ranging from 0.0 to 1.0.\n";
-					std::wcout << "  Reason: the percentage of stored Z 0 to 1 values that do not make normalized XYZ vectors is " << 100.0f * (float)z_outside_zzero_bounds / (float)image_size << " percent,\n    lower than the error tolerance of " << 100.0f * gOptions.errorTolerance << " percent.\n";
+					std::wcout << "  Reason: the percentage of stored Z 0 to 1 values that do not make normalized XYZ vectors is " << 100.0f * (float)z_outside_zzero_bounds / (float)image_size << "%,\n    lower than the error tolerance of " << 100.0f * gOptions.errorTolerance << "%.\n";
 				}
-				std::wcout << "    " << 100.0f * (float)(image_size - z_outside_zzero_bounds) / (float)image_size << " percent of Z's are valid for range 0 to 1, " << 100.0f * (float)(image_size - z_outside_bounds) / (float)image_size << " percent are valid for range -1 to 1.\n";
+				std::wcout << "    " << 100.0f * (float)(image_size - z_outside_zzero_bounds) / (float)image_size << "% of Z's are valid for range 0 to 1, " << 100.0f * (float)(image_size - z_outside_bounds) / (float)image_size << "% are valid for range -1 to 1.\n";
 			}
 		}
 	}
@@ -1131,6 +1135,10 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 		if (image_field_bits & IMAGE_B_CHANNEL_ALL_SAME) {
 			if (gOptions.analyze) {
 				std::wcout << "  The blue channel values in file '" << inputFile << "' all have the same value: " << first_pixel[2] << ".\n";
+			}
+		} else if (b_less_than_255 < (float)image_size * gOptions.errorTolerance) {
+			if (gOptions.analyze) {
+				std::wcout << "  Only " << 100.0f * (float)b_less_than_255 / (float)image_size << "% (" << b_less_than_255 << " texels) of the blue channel values are less than 255.\n";
 			}
 		}
 	}
@@ -1185,8 +1193,8 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 		case IMAGE_TYPE_NORMAL_XY_ONLY:
 			must_clean |= XYanalysis(image_field_bits, image_size, normalizable_xy, xy_outside_bounds);
 			// no Zanalysis, since with XY we always derive Z precisely
-			std::wcout << "  For the input Z's, assuming Z -1 to 1, " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texel Z values\n    are more than 2 levels from being properly normalized.\n";
-			std::wcout << "  The z values were found to be as far off as " << zmaxabsdiff << " levels in expected value,\n    and were greater than a difference of 2 levels for " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texels.\n";
+			std::wcout << "  For the input Z's, assuming Z -1 to 1, " << 100.0f * (float)z_outside_bounds / (float)image_size << "% of the texel Z values\n    are more than 2 levels from being properly normalized.\n";
+			std::wcout << "  The Z values were found to be as far off as " << zmaxabsdiff << " levels in expected value,\n    and were greater than a difference of 2 levels for " << 100.0f * (float)z_outside_bounds / (float)image_size << "% of the texels.\n";
 
 			std::wcout << "  Average XY values: X " << (float)(xsum / (double)image_size) << ", Y " << (float)(ysum / (double)image_size) << "\n";
 			std::wcout << "  X and Y values ranges:\n    X " << CONVERT_CHANNEL_FULL_DIRECT(chan_min[0]) << " to " << CONVERT_CHANNEL_FULL_DIRECT(chan_max[0])
@@ -1381,16 +1389,16 @@ bool XYanalysis(int image_field_bits, int image_size, int* normalizable_xy, int 
 	else if (image_field_bits & IMAGE_ALMOST_VALID_NORMALS_XY) {
 		assert(xy_outside_bounds == 0);
 		must_clean = true;
-		std::wcout << "  The X and Y coordinates form vectors 1 levels longer than 1.0 for " << 100.0f * (float)normalizable_xy[1] / (float)image_size << " percent of the texels.\n";
+		std::wcout << "  The X and Y coordinates form vectors 1 levels longer than 1.0 for " << 100.0f * (float)normalizable_xy[1] / (float)image_size << "% (" << normalizable_xy[1] << " texels) of the texels.\n";
 	}
 	else if (image_field_bits & IMAGE_ALMOST2_VALID_NORMALS_XY) {
 		assert(xy_outside_bounds == 0);
 		must_clean = true;
-		std::wcout << "  The X and Y coordinates form vectors 2 levels longer than 1.0 for " << 100.0f * (float)normalizable_xy[2] / (float)image_size << " percent of the texels,\n    and 1 level longer for " << 100.0f * (float)normalizable_xy[1] / (float)image_size << " percent.\n";
+		std::wcout << "  The X and Y coordinates form vectors 2 levels longer than 1.0 for " << 100.0f * (float)normalizable_xy[2] / (float)image_size << "% of the texels,\n    and 1 level longer for " << 100.0f * (float)normalizable_xy[1] / (float)image_size << "%, total (" << normalizable_xy[1]+ normalizable_xy[2] << " texels).\n";
 	}
 	else {
 		must_clean = true;
-		std::wcout << "  The X and Y coordinates form vectors considerably longer than 1.0 for " << 100.0f * (float)xy_outside_bounds / (float)image_size << " percent of the texels,\n    only 2 levels longer for " << 100.0f * (float)normalizable_xy[2] / (float)image_size << " percent, and just 1 level longer for " << 100.0f * (float)normalizable_xy[1] / (float)image_size << " percent.\n";
+		std::wcout << "  The X and Y coordinates form vectors considerably longer than 1.0 for " << 100.0f * (float)xy_outside_bounds / (float)image_size << "% of the texels,\n    only 2 levels longer for " << 100.0f * (float)normalizable_xy[2] / (float)image_size << "%, and just 1 level longer for " << 100.0f * (float)normalizable_xy[1] / (float)image_size << "%.\n";
 	}
 
 	return must_clean;
@@ -1406,22 +1414,22 @@ bool Zanalysis(int image_type, int image_field_bits, int image_size, int *normal
 		else {
 			must_clean = true;
 			if (image_field_bits & IMAGE_ALMOST_VALID_NORMALS_FULL) {
-				std::wcout << "  Some texels do not have perfect z-values,\n    but all Z's are within 1 level of the expected values.\n  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent of the XYZ normals are perfectly normalized.\n";
+				std::wcout << "  Some texels do not have perfect z-values,\n    but all Z's are within 1 level of the expected values.\n  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << "% of the XYZ normals are perfectly normalized.\n";
 			}
 			else if (image_field_bits & IMAGE_ALMOST2_VALID_NORMALS_FULL) {
 				std::wcout << "  Some texels do not have perfect z-values,\n    but all Z's are within 2 levels of the expected values.\n";
-				std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent of the XYZ normals are perfectly normalized,\n    "
-					<< 100.0f * (float)normal_length_zneg[1] / (float)image_size << " percent are just 1 level away, and\n    "
-					<< 100.0f * (float)normal_length_zneg[2] / (float)image_size << " percent are 2 levels away.\n";
+				std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << "% of the XYZ normals are perfectly normalized,\n    "
+					<< 100.0f * (float)normal_length_zneg[1] / (float)image_size << "% are just 1 level away, and\n    "
+					<< 100.0f * (float)normal_length_zneg[2] / (float)image_size << "% are 2 levels away.\n";
 			}
 			else {
 				// some Z values were way out of range
 				std::wcout << "  Some of the texture's stored Z values are not close to the expected values.\n";
-				std::wcout << "  The z values (assuming range 0 to 1) were found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
-				std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texel Z values are more than two from being properly normalized.\n";
-				std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent of the XYZ normals are perfectly normalized,\n    "
-					<< 100.0f * (float)normal_length_zneg[1] / (float)image_size << " percent are just 1 level away, and\n    "
-					<< 100.0f * (float)normal_length_zneg[2] / (float)image_size << " percent are 2 levels away.\n";
+				std::wcout << "  The Z values (assuming range -1 to 1) were found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
+				std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << "% of the texel Z values are more than two from being properly normalized.\n";
+				std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << "% of the XYZ normals are perfectly normalized,\n    "
+					<< 100.0f * (float)normal_length_zneg[1] / (float)image_size << "% are just 1 level away, and\n    "
+					<< 100.0f * (float)normal_length_zneg[2] / (float)image_size << "% are 2 levels away.\n";
 			}
 		}
 
@@ -1430,7 +1438,7 @@ bool Zanalysis(int image_type, int image_field_bits, int image_size, int *normal
 			if (!gOptions.allowNegativeZ) {
 				must_clean = true;
 			}
-			std::wcout << "  Some Z values were found to be negative, " << 100.0f * (float)(image_size-normal_zval_nonnegative) / (float)image_size << " percent.\n";
+			std::wcout << "  Some Z values were found to be negative, " << 100.0f * (float)(image_size-normal_zval_nonnegative) / (float)image_size << "% (" << image_size - normal_zval_nonnegative << " texels).\n";
 		}
 		std::wcout << "  The lowest Z value found was " << min_z << "\n";
 	}
@@ -1442,22 +1450,22 @@ bool Zanalysis(int image_type, int image_field_bits, int image_size, int *normal
 		else {
 			must_clean = true;
 			if (image_field_bits & IMAGE_ALMOST_VALID_NORMALS_ZERO) {
-				std::wcout << "  Some texels do not have perfect z-values,\n    but all Z's are within 1 level of the expected values.\n  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent of the XYZ normals are perfectly normalized.\n";
+				std::wcout << "  Some texels do not have perfect z-values,\n    but all Z's are within 1 level of the expected values.\n  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << "% of the XYZ normals are perfectly normalized.\n";
 			}
 			else if (image_field_bits & IMAGE_ALMOST2_VALID_NORMALS_ZERO) {
 				std::wcout << "  Some texels do not have perfect z-values,\n    but all Z's are within 2 levels of the expected values.\n";
-				std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent of the XYZ normals are perfectly normalized,\n    " 
-					<< 100.0f * (float)normal_length_zneg[1] / (float)image_size << " percent are just 1 level away, and\n    " 
-					<< 100.0f * (float)normal_length_zneg[2] / (float)image_size << " percent are 2 levels away.\n";
+				std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << "% of the XYZ normals are perfectly normalized,\n    " 
+					<< 100.0f * (float)normal_length_zneg[1] / (float)image_size << "% are just 1 level away, and\n    " 
+					<< 100.0f * (float)normal_length_zneg[2] / (float)image_size << "% are 2 levels away.\n";
 			}
 			else {
 				// some Z values were way out of range
 				std::wcout << "  Some of the texture's stored Z values are not close to the expected values.\n";
 				std::wcout << "  The stored z values (assuming range 0 to 1) were found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
-				std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << " percent of the texel Z values are more than two from being properly normalized.\n";
-				std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << " percent of the XYZ normals are perfectly normalized,\n    "
-					<< 100.0f * (float)normal_length_zneg[1] / (float)image_size << " percent are just 1 level away, and\n    " 
-					<< 100.0f * (float)normal_length_zneg[2] / (float)image_size << " percent are 2 levels away.\n";
+				std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << "% (" << z_outside_bounds << " texels) of the texel Z values are more than two from being properly normalized.\n";
+				std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << "% of the XYZ normals are perfectly normalized,\n    "
+					<< 100.0f * (float)normal_length_zneg[1] / (float)image_size << "% are just 1 level away, and\n    " 
+					<< 100.0f * (float)normal_length_zneg[2] / (float)image_size << "% are 2 levels away.\n";
 			}
 		}
 
@@ -1490,7 +1498,7 @@ void printHelp()
 	std::wcerr << "  -oheatmap - output red for XY > 1.0, green for non-matching Z's, blue for negative Z's.\n";
 	std::wcerr << "  -hfs # - for heightfields, specify output scale.\n";
 	std::wcerr << "  -hborder - treat heightfields as having a border (instead of wrapping around) when converting to a normals texture.\n";
-	std::wcerr << "  -etol # - when classifying a texture, what percentage of texels can fail. Default tolerance is 2 percent.\n";
+	std::wcerr << "  -etol # - when classifying a texture, what percentage of texels can fail. Default tolerance is 2%.\n";
 	std::wcerr << "  -etolxy # - when classifying a texture, how much the X and Y component averages can differ from 0. Default 0.10.\n";
 	std::wcerr << "  -csv - output all texel values and possible conversions to a comma-separated value file (for a spreadsheet).\n";
 	std::wcerr << "  -csve - output only texel values far out of range to a comma-separated value file (for a spreadsheet).\n";
