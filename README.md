@@ -97,11 +97,11 @@ Typical operations include:
   * To specify how the input heightfield data is scaled, use '-hfs #', where you give a scale factor. The value is 5.0 by default.
   * By default heightfields are considered to repeat, meaning that along the edges heights "off the texture" are taken from the opposite edge. TBD: do the borders wrap or are they "doubled" or something else, such as maintaining slope. '-hborder'
 
-Tools such as [BeyondCompare|https://www.scootersoftware.com/] are worthwhile for comparing the original image with its modified version. You can hover over individual texels and see how the values have changed. Here's an example diff, with the tolerance set to 2 texel levels difference in any channel.
+Tools such as [BeyondCompare](https://www.scootersoftware.com/) are worthwhile for comparing the original image with its modified version. You can hover over individual texels and see how the values have changed. Here's an example diff, with the tolerance set to 2 texel levels difference in any channel.
 
 ![Comparison of clearcoat_normal.png, original vs. cleaned](readme_diff.png "Comparison of clearcoat_normal.png, original vs. cleaned")
 
-In this example, from [glTF-sample-models|https://github.com/KhronosGroup/glTF-Sample-Models/blob/main/2.0/ClearcoatWicker/glTF/clearcoat_normal.png], you can see that the more curved areas are far off. For example, texel X:155, Y:48 has an RGB value of (100,145,240). This gives an XYZ normal of (-0.216,0.137,0.882), which has a normal length of 0.918, well short of 1.0. Assuming X and Y are valid and the blue channel was formed incorrectly, we recompute Z as 0.967 to make a normal of length 1.0, which translates to a blue value of 251.
+In this example, from [glTF-sample-models](https://github.com/KhronosGroup/glTF-Sample-Models/blob/main/2.0/ClearcoatWicker/glTF/clearcoat_normal.png), you can see that the more curved areas are far off. For example, texel X:155, Y:48 has an RGB value of (100,145,240). This gives an XYZ normal of (-0.216,0.137,0.882), which has a normal length of 0.918, well short of 1.0. Assuming X and Y are valid and the blue channel was formed incorrectly, we recompute Z as 0.967 to make a normal of length 1.0, which translates to a blue value of 251.
 
 ## Algorithms
 
