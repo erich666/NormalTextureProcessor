@@ -6,6 +6,8 @@ This C++ project examines normals textures (i.e., textures for applying bumps to
 
 ![Sample conversion](readme_sample.png "Sample conversion")
 
+A considerable percentage of normals textures examined have badly computed Z (and sometimes X and Y) values. In practice I recommend always deriving Z from X and Y in your shaders. However, if you nonetheless want to store XYZ triplets with proper Z values, use this program to clean up your normals textures.
+
 ## Installation
 
 Develop on Windows 10 on Visual Studio 2022 (double-click NormalTextureProcessor.sln, build Release version). You might be able to compile and run it elsewhere, as the program is pretty Windows-free and is purely command-line driven, with no graphical user interface.
@@ -14,7 +16,7 @@ The executable is available for download, [zip file here](https://www.realtimere
 
 ## Usage
 
-This system has a few major functions: analyze normals textures for what type and how good a normals texture they are, clean up textures that have problems, and convert from one normals texture type to another. Currently the system is limited to reading in 8-bit PNG and TGA (Targa) textures. 16-bit PNG images can be read in, but are currently converted to 8 bits. To avoid name collisions with PNGs, Targa files read in and manipulated are output with the suffix "_TGA" added to the input file name, output as PNGs.
+This system has a few major functions: analyze normals textures for what type and how good a normals texture they are, clean up textures that have problems, and convert from one normals texture type to another. Currently the system is limited to reading in 8-bit PNG and TGA (Targa) textures. 16-bit PNG images can be read in, but are currently converted to 8 bits. To avoid name collisions with PNGs, Targa files read in and manipulated are output with the suffix "_TGA" added to the input file name, output as PNGs. JPEG is not supported, and I warn against using it unless forced, as its lossy compression is almost guaranteed to generate RGB's that convert to XYZ's that are not normalized.
 
 A fussy note on terminology: I use the term "normals texture" for any (usually blue-ish) texture that stores normal directions as RGB (or just RG) values. "Normal texture" can be confusing - what's an "abnormal texture"? I avoid the word "map" and always use "texture," but you'll see "normal map" commonly used instead of "normal texture" elsewhere. Technically, the "map" is how the texture is applied to a surface, a separate function irrelevant here. Various analysis messages in the program talk about "one level" or "two levels", which refers to 8-bit values. For example, if a blue channel value was expected to be 228 but was 230, that is two levels of difference.
 
@@ -97,11 +99,23 @@ Typical operations include:
   * To specify how the input heightfield data is scaled, use '-hfs #', where you give a scale factor. The value is 5.0 by default.
   * By default heightfields are considered to repeat, meaning that along the edges heights "off the texture" are taken from the opposite edge. TBD: do the borders wrap or are they "doubled" or something else, such as maintaining slope. '-hborder'
 
+This cleanup process comes with a caveat: garbage in, garbage out. If your normals textures have XY values that are trustworthy and you know the Z values are wonky for some reason, this tool can properly fix the Z values. If your normals are just plain unnormalized, where X, Y, and Z are the right direction but the wrong length, this tool will not properly fix your texture, since it assumes X and Y are their proper lengths and Z was badly derived. If you do happen to learn that your textures are this way - right directions, wrong lengths - let me know and I can add an option to fix the texture's normals in this way. The program itself cannot determine which type of error is occurring, so it assumes that only the Z value is invalid.
+
 Tools such as [BeyondCompare](https://www.scootersoftware.com/) are worthwhile for comparing the original image with its modified version. You can hover over individual texels and see how the values have changed. Here's an example diff, with the tolerance set to 2 texel levels difference in any channel; red is more, blue is equal or less, gray is no difference.
 
 ![Comparison of clearcoat_normal.png, original vs. cleaned](readme_diff.png "Comparison of clearcoat_normal.png, original vs. cleaned")
 
 In this example, from [glTF-sample-models](https://github.com/KhronosGroup/glTF-Sample-Models/blob/main/2.0/ClearcoatWicker/glTF/clearcoat_normal.png), you can see that the more curved areas are far off. For example, texel X:155, Y:48 has an RGB value of (100,145,240). This gives an XYZ normal of (-0.216,0.137,0.882), which has a normal length of 0.918, well short of 1.0. Assuming X and Y are valid and the blue channel was formed incorrectly, we recompute Z as 0.967 to make a normal of length 1.0, which translates to a blue value of 251.
+
+Does it matter? Using the original vs. corrected clearcoat_normal.png with the other files in the [ClearcoatWicker](https://github.com/KhronosGroup/glTF-Sample-Models/tree/main/2.0/ClearcoatWicker/glTF) test directory, using Don McCurdy's (excellent) [glTF Viewer](https://gltf-viewer.donmccurdy.com/), we get these two renderings, diff'ed:
+
+![ClearcoatWicker, original vs. normalization corrected](readme_wicker_render_diff.png "ClearcoatWicker, original vs. normalization corrected")
+
+Visually the changes are subtle, with perhaps the easiest to notice being the white highlight shapes differing, in the middle right along the vertical seam, and the grooves along the seam at the very bottom, darker in the original. In other tests, such as the [StainedGlassLamp](https://github.com/KhronosGroup/glTF-Sample-Models/tree/main/2.0/StainedGlassLamp), where the goal is to accurately capture the real-world model, fixing the four normals textures also results in slightly different renderings. 
+
+![StainedGlassLamp, original vs. normalization corrected](readme_lamp_render_diff.png "StainedGlassLamp, original vs. normalization corrected")
+
+Long and short, storing the normals incorrectly is a source of error. This program can, at the minimum, tip you off when your normals are not normalized, and provide properly normalized textures by correcting the Z values.
 
 ## Algorithms
 
@@ -122,6 +136,7 @@ If you want to compute Z from X and Y, it's:
 ```sh
 z = sqrt(1.0f - (x * x + y * y));
 ```
+In practice I recommend always deriving Z from X and Y in your shaders, even if Z is available, as a considerable percentage of normals textures examined often have bad Z (blue) values stored.
 
 Getting the rounding right for the return trip is important. Here's that:
 ```sh
