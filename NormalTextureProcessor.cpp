@@ -186,7 +186,7 @@ void saveErrorForEnd();
 
 //bool examineForDirectXStyle(progimage_info* src);
 void convertHeightfieldToXYZ(progimage_info* dst, progimage_info* src, float heightfieldScale, bool input_grayscale, bool y_flip, bool clamp_border);
-void cleanAndCopyNormalTexture(progimage_info* dst, progimage_info* src, int image_type, bool output_zzero, bool y_flip, bool heatmap);
+void cleanAndCopyNormalTexture(progimage_info* dst, progimage_info* src, int image_type, bool output_zzero, bool y_flip, bool heatmap, bool reason_xy);
 
 bool removeFileType(wchar_t* name);
 int isImageFile(wchar_t* name);
@@ -1311,7 +1311,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 			if (gOptions.verbose) {
 				std::wcout << ">> Readying output " << (gOptions.outputHeatmap ? "heatmap" : "normals") << " texture.\n" << std::flush;
 			}
-			cleanAndCopyNormalTexture(&destination, &imageInfo, image_type, gOptions.outputZzeroToOne, y_flip, gOptions.outputHeatmap);
+			cleanAndCopyNormalTexture(&destination, &imageInfo, image_type, gOptions.outputZzeroToOne, y_flip, gOptions.outputHeatmap, reason_xy);
 		}
 
 		if (perform_output) {
@@ -1760,7 +1760,7 @@ void convertHeightfieldToXYZ(progimage_info* dst, progimage_info* src, float hei
 
 // TODO: add conversion of normals to heightfield. Can we derive DirectX vs. OpenGL style from this info in some way? (correlation of bumps)
 
-void cleanAndCopyNormalTexture(progimage_info* dst, progimage_info* src, int image_type, bool output_zzero, bool y_flip, bool heatmap)
+void cleanAndCopyNormalTexture(progimage_info* dst, progimage_info* src, int image_type, bool output_zzero, bool y_flip, bool heatmap, bool reason_xy)
 {
 	int row, col;
 	float x, y, z;
@@ -1820,7 +1820,9 @@ void cleanAndCopyNormalTexture(progimage_info* dst, progimage_info* src, int ima
 				// red is XY's > 1, green is Z's not matching or out of bounds, blue is negative Z's
 				float zdata, diff;
 				unsigned char bcalc, bread;
-				if (image_type == IMAGE_TYPE_NORMAL_FULL) {
+				// is image a full or one we're guessing is XY-only?
+				if (image_type == IMAGE_TYPE_NORMAL_FULL ||
+					(reason_xy && image_type == IMAGE_TYPE_NORMAL_XY_ONLY)) {
 					CONVERT_CHANNEL_TO_FULL(src_data[2], zdata);
 					// convert both z's back to pixel space and use difference
 					CONVERT_FULL_TO_CHANNEL(zdata, bread);
