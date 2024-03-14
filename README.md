@@ -6,11 +6,11 @@ This C++ project examines normals textures (i.e., textures for applying bumps to
 
 ![Sample conversion](readme_sample.png "Sample conversion")
 
-A considerable percentage of normals textures out there have badly computed Z (and sometimes X and Y) values. In practice I recommend always deriving Z from X and Y in your shaders. However, that can have a (usually small) performance hit. Also, files for glTF and USD files, among others, expect that the XYZ values are valid. So, if you want to store XYZ triplets with proper Z values, use this program to analyze and clean up your normals textures.
+A considerable percentage of normals textures out there have badly computed Z (and sometimes X and Y) values. In practice you could always derive Z from X and Y in your shaders. However, that can have a (usually small) performance hit. Also, files for glTF and USD files, among others, expect that the XYZ values are valid. Give the model to someone else and their viewer may not fix the Z values and then give a different result. So, if you want to store XYZ triplets with proper Z values, use this program to analyze and clean up your normals textures.
 
 ### How Normals Go Bad
 
-First and foremost, it's hard for us humans to see when a normals textures _is_ bad. There's a certain color to the textures, but unless they're wildly wrong, it's not easy to notice that the Z values are incorrect. Because they're hard to detect, normals can go bad and not be noticed. That's why I wrote this program, because I kept running into bad normals that the creators didn't realize were wrong.
+First and foremost, it's hard for us humans to see when a normals textures _is_ bad. There's a certain color to the textures, but unless they're wildly wrong, it's not easy to notice that the Z values are incorrect. Because they're hard to detect, normals can go bad and not be noticed. That's why I wrote this program, because I kept running into incorrect normals that the creators didn't realize were wrong.
 
 There are plenty of ways that the XYZ values for a normals texture can go bad. The tool producing the normals texture, typically converting from a grayscale heightfield, can be faulty. As much as I like [Normalmap Online](https://cpetry.github.io/NormalMap-Online/), [github](https://github.com/cpetry/NormalMap-Online), I know it produces imprecise normals textures. I hope to examine and evaluate other programs as I go, which is why I provide copious algorithm notes below - there's a right way to convert from XYZ to RGB. I have also seen evidence that along the fringes of cutout objects the normals will be off; I'm not sure why.
 
