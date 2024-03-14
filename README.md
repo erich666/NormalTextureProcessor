@@ -6,44 +6,65 @@ This C++ project examines normals textures (i.e., textures for applying bumps to
 
 ![Sample conversion](readme_sample.png "Sample conversion")
 
-A considerable percentage of normals textures examined have badly computed Z (and sometimes X and Y) values. In practice I recommend always deriving Z from X and Y in your shaders. However, if you nonetheless want to store XYZ triplets with proper Z values, use this program to clean up your normals textures.
+A considerable percentage of normals textures out there have badly computed Z (and sometimes X and Y) values. In practice I recommend always deriving Z from X and Y in your shaders. However, that can have a (usually small) performance hit. Also, files for glTF and USD files, among others, expect that the XYZ values are valid. So, if you want to store XYZ triplets with proper Z values, use this program to analyze and clean up your normals textures.
+
+### How Normals Go Bad
+
+First and foremost, it's hard for us humans to see when a normals textures _is_ bad. There's a certain color to the textures, but unless they're wildly wrong, it's not easy to notice that the Z values are incorrect. Because they're hard to detect, normals can go bad and not be noticed. That's why I wrote this program, because I kept running into bad normals that the creators didn't realize were wrong.
+
+There are plenty of ways that the XYZ values for a normals texture can go bad. The tool producing the normals texture, typically converting from a grayscale heightfield, can be faulty. As much as I like [Normalmap Online](https://cpetry.github.io/NormalMap-Online/), [github](https://github.com/cpetry/NormalMap-Online), I know it produces imprecise normals textures. I hope to examine and evaluate other programs as I go, which is why I provide copious algorithm notes below - there's a right way to convert from XYZ to RGB. I have also seen evidence that along the fringes of cutout objects the normals will be off; I'm not sure why.
+
+Another source of error occurs when a normals texture is resized. If you blithely change the dimensions of a texture, the new normals texture will look reasonable and probably work fairly well. But, it will likely be wrong, a little bit or a lot. Blending two or more normalized normals together will rarely give a normalized result. After resizing, the Z values stored should be rederived. X and Y values may also stray a bit, creating vectors that are illegal. Whatever the case, this program can clean up such data. That said, a more accurate way to resize would be to work from the original heightfield image and convert to a normals texture after resizing.
 
 ## Installation
 
 Develop on Windows 10 on Visual Studio 2022 (double-click NormalTextureProcessor.sln, build Release version). You might be able to compile and run it elsewhere, as the program is pretty Windows-free and is purely command-line driven, with no graphical user interface.
 
-The executable is available for download, [zip file here](https://www.realtimerendering.com/erich/download/NormalTextureProcessor.zip). Last updated March 6, 2024.
+The executable is available for download, [zip file here](https://www.realtimerendering.com/erich/download/NormalTextureProcessor.zip). Last updated March 14, 2024.
+
+### Test Suite
+
+Optionally, after building the Release version, you should be able to go into the **test_files** directory and double-click on **run_test_suite.bat**. As the [README in that directory](https://github.com/erich666/NormalTextureProcessor/tree/main/test_files) notes, running this test file will create various separate output directories where the results are put. You can look at **run_test_suite.bat** to see various options in use and look at the resulting files.
 
 ## Usage
 
-This system has a few major functions: analyze normals textures for what type and how good a normals texture they are, clean up textures that have problems, and convert from one normals texture type to another. Currently the system is limited to reading in 8-bit PNG and TGA (Targa) textures. 16-bit PNG images can be read in, but are currently converted to 8 bits. To avoid name collisions with PNGs, Targa files read in and manipulated are output with the suffix "_TGA" added to the input file name, output as PNGs. JPEG is not supported, and I warn against using it unless forced, as its lossy compression is almost guaranteed to generate RGB's that convert to XYZ's that are not normalized.
+**Quick start:** to analyze textures in a particular directory, run the exe like so:
+```sh
+NormalTextureProcessor.exe -a -v -idir path_to_your_input_directory
+```
+This will give an analysis of the textures in that directory. At the end of the analysis will be a summary like this:
+File types found, by category:
+```sh
+  Standard normals textures: chessboard_normal.png Knight_normal.png
+    Standard normals textures that are not perfectly normalized: Knight_normal.png
+  XY-only normals textures: bishop_black_normal.png bishop_white_normal.png Castle_normal.png
+```
+"XY-only normals textures" are ones where the analyzer found that some of the Z values stored are wrong, they don't form normalized normals. This can sometimes be on purpose, but if you're expecting RGB to convert to XYZ, then those textures are poorly formed and should be cleaned up (see more about that below). The "Standard normals textures" are basically fine. Those list as not perfectly normalized are just that: the Z's are close, but could be better. Cleaning these, too, is a fine thing to do, though usually not as critical.
+
+Currently the system is limited to reading in 8-bit PNG and TGA (Targa) textures. 16-bit PNG images can be read in, but are currently converted to 8 bits. To avoid name collisions with PNGs, Targa files read in and manipulated are output with the suffix "_TGA" added to the input file name, output as PNGs. JPEG is not supported, and I warn against using it unless forced, as its lossy compression is almost guaranteed to generate RGB's that convert to XYZ's that are not normalized.
 
 A fussy note on terminology: I use the term "normals texture" for any (usually blue-ish) texture that stores normal directions as RGB (or just RG) values. "Normal texture" can be confusing - what's an "abnormal texture"? I avoid the word "map" and always use "texture," but you'll see "normal map" commonly used instead of "normal texture" elsewhere. Technically, the "map" is how the texture is applied to a surface, a separate function irrelevant here. Various analysis messages in the program talk about "one level" or "two levels", which refers to 8-bit values. For example, if a blue channel value was expected to be 228 but was 230, that is two levels of difference.
+
+### Analysis
 
 To list out all the command-line options, simply don't put any:
 ```sh
 NormalTextureProcessor.exe
 ```
 
-### Test Suite
-
-After building the Release version, you should be able to go into the **test_files** directory and double-click on **run_test_suite.bat**. As the [README in that directory](https://github.com/erich666/NormalTextureProcessor/tree/main/test_files) notes, running this test file will create various separate output directories where the results are put. You can look at **run_test_suite.bat** to see various options in use and look at the resulting files.
-
-### Analysis
-
 This list of options will be confusing, so here are some typical combinations. To analyze all PNG and TGA textures in the current directory:
 ```sh
 NormalTextureProcessor.exe -a -v
 ```
-The '-v' is optional. It means "verbose", giving you additional information during processing. I recommend trying it on and off to see what you're missing.
+The '-v' is optional. It means "verbose", giving you additional information during processing, mostly about what files were cleaned. I recommend trying it on and off to see what you're missing.
 
-A report is generated. At the end of the report the various files are output in separate categories, such as "pristine", "nearly right", etc. These lists can be used to copy and paste the list of files into the program itself, e.g.:
+A report is generated when '-a' is selected. The lists at the end of the analysis can be used to copy and paste specific files into the program itself, e.g.:
 ```sh
-NormalTextureProcessor.exe -a beehive_normal.png cakestand_n.png
+NormalTextureProcessor.exe -a bishop_black_normal.png bishop_white_normal.png Castle_normal.png
 ```
-By putting specific files on the command line, the program processes only them. This example doesn't do much, just analyzes the (already analyzed) set of files again. The point is that you can specify individual files for other operations, such as cleanup and conversion.
+By putting specific files on the command line, the program processes only them. This example doesn't do much, just analyzes the (already analyzed) set of files again. The main use is that you can specify individual files for other operations, such as cleanup and conversion.
 
-You can also feed in an input directory:
+You can also feed in an input directory located elsewhere:
 ```sh
 NormalTextureProcessor.exe -a -idir flora/materials/normal_textures
 ```
