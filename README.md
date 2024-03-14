@@ -127,15 +127,15 @@ Tools such as [BeyondCompare](https://www.scootersoftware.com/) are worthwhile f
 
 ![Comparison of clearcoat_normal.png, original vs. cleaned](readme_clearcoat_diff.png "Comparison of clearcoat_normal.png, original vs. cleaned")
 
-In this example, from [glTF-sample-models](https://github.com/KhronosGroup/glTF-Sample-Models/blob/main/2.0/ClearcoatWicker/glTF/clearcoat_normal.png), you can see that the more curved areas are far off. For example, texel X:155, Y:48 has an RGB value of (100,145,240). This gives an XYZ normal of (-0.216,0.137,0.882), which has a normal length of 0.918, well short of 1.0. Assuming X and Y are valid and the blue channel was formed incorrectly, we recompute Z as 0.967 to make a normal of length 1.0, which translates to a blue value of 251.
+In this example, from [glTF-sample-assets](https://github.com/KhronosGroup/glTF-Sample-Assets/blob/main/Models/ClearcoatWicker/glTF/clearcoat_normal.png), you can see that the more curved areas are far off. For example, texel X:155, Y:48 has an RGB value of (100,145,240). This gives an XYZ normal of (-0.216,0.137,0.882), which has a normal length of 0.918, well short of 1.0. Assuming X and Y are valid and the blue channel was formed incorrectly, we recompute Z as 0.967 to make a normal of length 1.0, which translates to a blue value of 251.
 
-Does it matter? Using the original vs. corrected clearcoat_normal.png with the other files in the [ClearcoatWicker](https://github.com/KhronosGroup/glTF-Sample-Models/tree/main/2.0/ClearcoatWicker/glTF) test directory, using Don McCurdy's (excellent) [glTF Viewer](https://gltf-viewer.donmccurdy.com/), we get these two renderings, diff'ed:
+Does it matter? Using the original vs. corrected clearcoat_normal.png with the other files in the [ClearcoatWicker](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/ClearcoatWicker/glTF) test directory, using Don McCurdy's (excellent) [glTF Viewer](https://gltf-viewer.donmccurdy.com/), we get these two renderings, diff'ed:
 
 ![ClearcoatWicker, original vs. normalization corrected](readme_wicker_render_diff.png "ClearcoatWicker, original vs. normalization corrected")
 
-Visually the changes are subtle. In the middle along the vertical seam the white highlight shapes are different. In the grooves along the seam at the very bottom the original image has darker ones.
+Visually the changes are subtle. In the middle along the vertical seam the white highlight shapes are different. In the indentations along the seam at the very bottom, the original image has darker ones.
 
-In other tests, such as the [StainedGlassLamp](https://github.com/KhronosGroup/glTF-Sample-Models/tree/main/2.0/StainedGlassLamp), where the goal is to accurately capture the real-world model, fixing the four normals textures for this model also results in slightly different renderings:
+In other tests, such as the [StainedGlassLamp](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/StainedGlassLamp), where the goal is to accurately capture the real-world model, fixing the four normals textures for this model also results in slightly different renderings:
 
 ![StainedGlassLamp, original vs. normalization corrected](readme_lamp_render_diff.png "StainedGlassLamp, original vs. normalization corrected")
 
@@ -143,7 +143,7 @@ Long and short, storing the normals incorrectly is a source of error. This progr
 
 ## Algorithms
 
-The key thing is to get the conversion right. Here's how to go from an 8-bit color channel value "rgb" to the floating point range -1.0 to 1.0 for "xyz":
+The key thing is to get the conversion right. Here's how to go from an 8-bit color channel value "rgb" to the floating-point range -1.0 to 1.0 for "xyz":
 ```sh
 x = ((float)r / 255.0f) * 2.0f - 1.0f;
 y = ((float)g / 255.0f) * 2.0f - 1.0f;
@@ -210,7 +210,7 @@ r = 73   // in fact, 73.50001025, drop the fraction, right in the middle of the 
 g = 162  // 162.4999955, drop the fraction
 b = 238  // 238.4999915, drop the fraction. Came from converting z=0.8666666
 ```
-No surprise, each floating point value is right in the middle of the "range" for each RGB value, with each fraction being near 0.5. This is a good reality check that our functions for rgb -> xyz and xyz -> rgb are solid in their own right.
+No surprise, each floating-point value is right in the middle of the "range" for each RGB value, with each fraction being near 0.5. This is a good reality check that our functions for rgb -> xyz and xyz -> rgb are solid in their own right.
 
 The problem happens if we now derive Z from x and y, instead of using the converted z value of 0.8666666:
 ```sh
@@ -240,7 +240,7 @@ Some resources I've found useful:
 * [UsdPreviewSurface](https://openusd.org/release/spec_usdpreviewsurface.html#texture-reader) - the USD specification's basic material. Search on "normal3f" to see more about how to specify it.
 * [glTF 2.0 specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html) - has much about normals textures.
 * [GIMP conversion](https://docs.gimp.org/en/gimp-filter-normal-map.html) - how to make normals textures from heightfields in GIMP.
-* [_Survey of Efficient Representations for Independent Unit Vectors_|https://jcgt.org/published/0003/02/01/] - Storing normals as XYZ triplets is wasteful, since Z could just be computed from X and Y in most usages. Even storing just X and Y gives pairs of numbers that are unusable, forming vectors longer than 1.0, and the precision is poorly distributed for the rest. This paper and code gives some better alternate representations.
+* [_Survey of Efficient Representations for Independent Unit Vectors_](https://jcgt.org/published/0003/02/01/) - Storing normals as XYZ triplets is wasteful, since Z could just be computed from X and Y in most usages. Even storing just X and Y gives pairs of numbers that are unusable, forming vectors longer than 1.0, and the precision is poorly distributed for the rest. This paper and code gives some better alternate representations.
 
 ## License
 
