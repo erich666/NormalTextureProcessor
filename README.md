@@ -111,7 +111,9 @@ Does it matter? Using the original vs. corrected clearcoat_normal.png with the o
 
 ![ClearcoatWicker, original vs. normalization corrected](readme_wicker_render_diff.png "ClearcoatWicker, original vs. normalization corrected")
 
-Visually the changes are subtle, with perhaps the easiest to notice being the white highlight shapes differing, in the middle right along the vertical seam, and the grooves along the seam at the very bottom, darker in the original. In other tests, such as the [StainedGlassLamp](https://github.com/KhronosGroup/glTF-Sample-Models/tree/main/2.0/StainedGlassLamp), where the goal is to accurately capture the real-world model, fixing the four normals textures also results in slightly different renderings. 
+Visually the changes are subtle. In the middle along the vertical seam the white highlight shapes are different. In the grooves along the seam at the very bottom the original image has darker ones.
+
+In other tests, such as the [StainedGlassLamp](https://github.com/KhronosGroup/glTF-Sample-Models/tree/main/2.0/StainedGlassLamp), where the goal is to accurately capture the real-world model, fixing the four normals textures for this model also results in slightly different renderings:
 
 ![StainedGlassLamp, original vs. normalization corrected](readme_lamp_render_diff.png "StainedGlassLamp, original vs. normalization corrected")
 
