@@ -252,10 +252,11 @@ Thanks to Nick Porcino for the quick check on my conversion equations. Thanks to
 
 ## Roadmap
 
-Potential tasks (no promises!):
+Potential tasks (no promises! and, suggestions welcome):
 
 - [ ] Figure out way (if any) to tell if a texture is OpenGL or DirectX oriented. I suspect there's some curvature analysis, perhaps converting into a heightfield, that could be done. For example, take differences between texels horizontally and vertically and see the correspondence - bumps are more likely than hyperboloids. Or maybe it's not possible (well, it certainly isn't if there's no Y variance).
 - [ ] Convert back from normals textures to heightfields. Not sure this is useful (nor how to do it, exactly), but might be worth adding, for visualization and analysis.
 - [ ] Ignore texels that are black or white (probably unused in texture, except for heightfields). Adjust statistics, CSV output, etc.
 - [ ] Support 16-bit PNG files fully, input and output. Also properly convert channel values that have less than 8 bits.
-- [ ] Ignore pixels with alpha values of 0.
+- [ ] Ignore texels with alpha values of 0.
+- [ ] Recursively examine and clean up normals texture files. Pretty easy to add, but I think I _won't_ do it, because the program doesn't know how to perfectly differentiate a normals texture from something else. So, it's better to analyze a directory, then feed in the specific files you want/need to cleanup.
