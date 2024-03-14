@@ -972,6 +972,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 
 	int image_type = 0;
 	bool must_clean = false;
+	bool reason_xy = false;
 	// What sort of normals texture is this?
 	if (gOptions.inputZnegOneToOne) {
 		image_type = IMAGE_TYPE_NORMAL_FULL;
@@ -1066,9 +1067,11 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 				// stricter: if (zmaxabsdiff > 2) {
 				if (z_outside_bounds > gOptions.errorTolerance * image_size) {
 					image_type = IMAGE_TYPE_NORMAL_XY_ONLY;
+					reason_xy = true;
 					if (gOptions.analyze) {
 						std::wcout << "Image file '" << inputFile << "' is probably an XY-only normals texture.\n";
 						std::wcout << "  Reason: the percentage of stored Z -1 to 1 values that do not make normalized XYZ vectors is " << 100.0f * (float)z_outside_bounds/(float)image_size << "%,\n    larger than the error tolerance of " << 100.0f * gOptions.errorTolerance << "%.\n";
+						std::wcout << "    The Z values were found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
 					}
 				}
 				else {
@@ -1096,8 +1099,10 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 				// stricter: zmaxabsdiff_zero > 2
 				if (z_outside_zzero_bounds > gOptions.errorTolerance * image_size) {
 					image_type = IMAGE_TYPE_NORMAL_XY_ONLY;
+					reason_xy = true;
 					std::wcout << "Image file '" << inputFile << "' is probably an XY-only normals texture.\n";
 					std::wcout << "  Reason: the percentage of stored Z 0 to 1 values that do not make normalized XYZ vectors is " << 100.0f * (float)z_outside_zzero_bounds / (float)image_size << "%,\n    larger than the error tolerance of " << 100.0f * gOptions.errorTolerance << "%.\n";
+					std::wcout << "    The Z values were found to be as far off as " << zmaxabsdiff_zero << " levels in expected value.\n";
 				}
 				else {
 					image_type = IMAGE_TYPE_NORMAL_ZERO;
@@ -1191,16 +1196,19 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 			std::wcout << "  Color channels range: r " << chan_min[0] << " to " << chan_max[0] << "; g " << chan_min[1] << " to " << chan_max[1] << "; b " << chan_min[2] << " to " << chan_max[2] << ".\n";
 			break;
 		case IMAGE_TYPE_NORMAL_XY_ONLY:
-			must_clean |= XYanalysis(image_field_bits, image_size, normalizable_xy, xy_outside_bounds);
 			// no Zanalysis, since with XY we always derive Z precisely
-			std::wcout << "  For the input Z's, assuming Z -1 to 1, " << 100.0f * (float)z_outside_bounds / (float)image_size << "% of the texel Z values\n    are more than 2 levels from being properly normalized.\n";
-			std::wcout << "  The Z values were found to be as far off as " << zmaxabsdiff << " levels in expected value,\n    and were greater than a difference of 2 levels for " << 100.0f * (float)z_outside_bounds / (float)image_size << "% of the texels.\n";
+			// If a reason for categorizing the XY was already given, don't repeat here
+			if (!reason_xy) {
+				std::wcout << "  Note: For the input Z's, assuming Z -1 to 1, " << 100.0f * (float)z_outside_bounds / (float)image_size << "% of the texel Z values\n    are more than 2 levels from being properly normalized.\n";
+				std::wcout << "    The Z values were found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
+			}
+			std::wcout << "  Average input Z channel values, if mapped from -1 to 1: " << (float)(zsum / (double)image_size) << "\n";
+			std::wcout << "    and Z would range from " << CONVERT_CHANNEL_FULL_DIRECT(chan_min[2]) << " to " << CONVERT_CHANNEL_FULL_DIRECT(chan_max[2]) << "\n";
 
+			must_clean |= XYanalysis(image_field_bits, image_size, normalizable_xy, xy_outside_bounds);
 			std::wcout << "  Average XY values: X " << (float)(xsum / (double)image_size) << ", Y " << (float)(ysum / (double)image_size) << "\n";
 			std::wcout << "  X and Y values ranges:\n    X " << CONVERT_CHANNEL_FULL_DIRECT(chan_min[0]) << " to " << CONVERT_CHANNEL_FULL_DIRECT(chan_max[0])
 				<< "\n    Y " << CONVERT_CHANNEL_FULL_DIRECT(chan_min[1]) << " to " << CONVERT_CHANNEL_FULL_DIRECT(chan_max[1]) << "\n";
-			std::wcout << "  Average input Z channel values, if mapped from -1 to 1: " << (float)(zsum / (double)image_size) << "\n";
-			std::wcout << "    and Z would range from " << CONVERT_CHANNEL_FULL_DIRECT(chan_min[2]) << " to " << CONVERT_CHANNEL_FULL_DIRECT(chan_max[2]) << "\n";
 			std::wcout << "  Color channels range: r " << chan_min[0] << " to " << chan_max[0] << "; g " << chan_min[1] << " to " << chan_max[1] << "; b " << chan_min[2] << " to " << chan_max[2] << ".\n";
 			break;
 		case IMAGE_TYPE_HEIGHTFIELD:
@@ -1352,19 +1360,19 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 				}
 				else {
 					if (!(image_field_bits |= IMAGE_VALID_NORMALS_XY)) {
-						std::wcout << "    X,Y pairs were renormalized to be a length of 1.0 or less.\n";
+						std::wcout << "    Cleanup: X,Y pairs were renormalized to be a length of 1.0 or less.\n";
 					}
 					if (((image_type == IMAGE_TYPE_NORMAL_FULL) && !(image_field_bits & IMAGE_ALMOST2_VALID_NORMALS_FULL)) ||
 						((image_type == IMAGE_TYPE_NORMAL_ZERO) && !(image_field_bits & IMAGE_ALMOST2_VALID_NORMALS_ZERO))) {
-						std::wcout << "    Normals were renormalized to be the correct length.\n";
+						std::wcout << "    Cleanup: Normals were renormalized to be the correct length.\n";
 					}
 					else if (((image_type == IMAGE_TYPE_NORMAL_FULL) && !(image_field_bits & IMAGE_VALID_NORMALS_FULL)) ||
 						((image_type == IMAGE_TYPE_NORMAL_ZERO) && !(image_field_bits & IMAGE_VALID_NORMALS_ZERO))) {
-						std::wcout << "    Normals were cleaned up to roundtrippable triplets.\n";
+						std::wcout << "    Cleanup: Normals were cleaned up to roundtrippable triplets.\n";
 					}
 
 					if ((image_type == IMAGE_TYPE_NORMAL_FULL) && !(image_field_bits & IMAGE_VALID_ZVAL_NONNEG)) {
-						std::wcout << "    Z values were adjusted to not be negative.\n";
+						std::wcout << "    Cleanup: Z values were adjusted to not be negative.\n";
 					}
 				}
 				std::wcout << "\n" << std::flush;
@@ -1398,7 +1406,7 @@ bool XYanalysis(int image_field_bits, int image_size, int* normalizable_xy, int 
 	}
 	else {
 		must_clean = true;
-		std::wcout << "  The X and Y coordinates form vectors considerably longer than 1.0 for " << 100.0f * (float)xy_outside_bounds / (float)image_size << "% of the texels,\n    only 2 levels longer for " << 100.0f * (float)normalizable_xy[2] / (float)image_size << "%, and just 1 level longer for " << 100.0f * (float)normalizable_xy[1] / (float)image_size << "%.\n";
+		std::wcout << "  *Problem: the X and Y coordinates form vectors considerably longer than 1.0 for " << 100.0f * (float)xy_outside_bounds / (float)image_size << "% of the texels,\n    only 2 levels longer for " << 100.0f * (float)normalizable_xy[2] / (float)image_size << "%, and just 1 level longer for " << 100.0f * (float)normalizable_xy[1] / (float)image_size << "%.\n";
 	}
 
 	return must_clean;
@@ -1424,8 +1432,7 @@ bool Zanalysis(int image_type, int image_field_bits, int image_size, int *normal
 			}
 			else {
 				// some Z values were way out of range
-				std::wcout << "  Some of the texture's stored Z values are not close to the expected values.\n";
-				std::wcout << "  The Z values (assuming range -1 to 1) were found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
+				std::wcout << "  *Problem: the Z values (assuming range -1 to 1) were found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
 				std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << "% of the texel Z values are more than two from being properly normalized.\n";
 				std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << "% of the XYZ normals are perfectly normalized,\n    "
 					<< 100.0f * (float)normal_length_zneg[1] / (float)image_size << "% are just 1 level away, and\n    "
@@ -1438,7 +1445,7 @@ bool Zanalysis(int image_type, int image_field_bits, int image_size, int *normal
 			if (!gOptions.allowNegativeZ) {
 				must_clean = true;
 			}
-			std::wcout << "  Some Z values were found to be negative, " << 100.0f * (float)(image_size-normal_zval_nonnegative) / (float)image_size << "% (" << image_size - normal_zval_nonnegative << " texels).\n";
+			std::wcout << "  *Problem: some Z values were found to be negative, " << 100.0f * (float)(image_size-normal_zval_nonnegative) / (float)image_size << "% (" << image_size - normal_zval_nonnegative << " texels).\n";
 		}
 		std::wcout << "  The lowest Z value found was " << min_z << "\n";
 	}
@@ -1460,8 +1467,7 @@ bool Zanalysis(int image_type, int image_field_bits, int image_size, int *normal
 			}
 			else {
 				// some Z values were way out of range
-				std::wcout << "  Some of the texture's stored Z values are not close to the expected values.\n";
-				std::wcout << "  The stored z values (assuming range 0 to 1) were found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
+				std::wcout << "  *Problem: the stored z values (assuming range 0 to 1) were found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
 				std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << "% (" << z_outside_bounds << " texels) of the texel Z values are more than two from being properly normalized.\n";
 				std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << "% of the XYZ normals are perfectly normalized,\n    "
 					<< 100.0f * (float)normal_length_zneg[1] / (float)image_size << "% are just 1 level away, and\n    " 
@@ -1819,7 +1825,8 @@ void cleanAndCopyNormalTexture(progimage_info* dst, progimage_info* src, int ima
 					// convert both z's back to pixel space and use difference
 					CONVERT_FULL_TO_CHANNEL(zdata, bread);
 					CONVERT_FULL_TO_CHANNEL(z, bcalc);
-					diff = abs(bread - bcalc) * 255.0f / 2.99f;
+					// 3 levels or more is bright green
+					diff = abs(bread - bcalc) * 255.0f / 3.0f;
 					if (diff > 255.0f) {
 						diff = 255.0f;
 					}
@@ -1834,7 +1841,7 @@ void cleanAndCopyNormalTexture(progimage_info* dst, progimage_info* src, int ima
 					// convert both z's back to pixel space and use difference
 					CONVERT_ZERO_TO_CHANNEL(zdata, bread);
 					CONVERT_ZERO_TO_CHANNEL(z, bcalc);
-					diff = abs(bread - bcalc) * 255.0f / 2.99f;
+					diff = abs(bread - bcalc) * 255.0f / 3.0f;
 					if (diff > 255.0f) {
 						diff = 255.0f;
 					}
