@@ -66,8 +66,9 @@ By putting specific files on the command line, the program processes only them. 
 
 You can also feed in an input directory located elsewhere:
 ```sh
-NormalTextureProcessor.exe -a -idir flora/materials/normal_textures
+NormalTextureProcessor.exe -a -idir flora/materials/normal_textures > analysis.log
 ```
+The "> analysis.log" is optional, it's a way to put all the analysis into a file.
 
 There are three main types of normals textures this program recognizes. They are:
 * RGB "standard" normals textures: each color channel is interpreted as representing numbers that go from -1.0 to 1.0, for all channels.
