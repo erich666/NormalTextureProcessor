@@ -1478,15 +1478,15 @@ bool Zanalysis(int image_type, int image_field_bits, int image_size, int *normal
 			else {
 				// some Z values were way out of range
 				std::wcout << "  *Problem: the stored z values (assuming range 0 to 1) were found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
-				std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << "% of the texel Z values (" << z_outside_bounds << " texels) are more than two from being properly normalized.\n";
+				std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << "% of the texel Z values (" << z_outside_bounds << " texels) are more than two from being properly normalized (to Z-Zero).\n";
 				std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << "% of the XYZ normals are perfectly normalized,\n    "
 					<< 100.0f * (float)normal_length_zneg[1] / (float)image_size << "% are just 1 level away, and\n    " 
-					<< 100.0f * (float)normal_length_zneg[2] / (float)image_size << "% are 2 levels away.\n";
+					<< 100.0f * (float)normal_length_zneg[2] / (float)image_size << "% are 2 levels away (to Z-Zero).\n";
 			}
 		}
 
 		std::wcout << "  Normal lengths found in original data, assuming Z 0 to 1:\n    minimum " << minnormallength << " and maximum " << maxnormallength << "\n";
-		std::wcout << "  The lowest Z value found was " << min_z << "\n";
+		std::wcout << "  The lowest Z value found was " << min_z << "  (to Z-Zero)\n";	// zzero_min_z is passed in
 	}
 	return must_clean;
 }
