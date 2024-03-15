@@ -1159,12 +1159,6 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 	}
 
 	if (gOptions.analyze) {
-		// try to examine X and Y fluctuations to determine if this is OpenGL or DirectX style.
-		// Sadly, this idea doesn't seem to work - it's a coin-flip.
-		//if (image_type != IMAGE_TYPE_HEIGHTFIELD) {
-		//	examineForDirectXStyle(&imageInfo);
-		//}
-
 		if (image_type == IMAGE_TYPE_NORMAL_FULL || image_type == IMAGE_TYPE_NORMAL_ZERO) {
 			if (image_field_bits & IMAGE_ALL_SAME) {
 				std::wcout << "  All values in the texture are the same (normals do not vary): r = " << first_pixel[0] << ", g = " << first_pixel[1] << ", b = " << first_pixel[2] << "; X = " << x << ", Y = " << y << ", Z = " << z << "\n";
@@ -1246,6 +1240,11 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 			}
 			break;
 		}
+
+		// try to examine X and Y fluctuations to determine if this is OpenGL or DirectX style.
+		//if (image_type != IMAGE_TYPE_HEIGHTFIELD) {
+		//	examineForDirectXStyle(&imageInfo);
+		//}
 
 		// whitespace between analyses, and flush
 		std::wcout << "\n" << std::flush;
@@ -1583,100 +1582,90 @@ void saveErrorForEnd()
 
 //================================ Image Manipulation ====================================
 
-// My theory was that if we looked for peaks/valleys vs. "cusps" (peak in one direction, valley in another)
-// that there would be more peaks/valleys for OpenGL-style, cusps for DirectX style.
-// Imagine a simple bump with a single peak in an OpenGL-style texture. That peak would look like a cusp
-// if we interpreted the texture as a DirectX texture.
-// Unfortunately, this doesn't work.
-// TODO: another idea is to unscramble the normal map to get a height map. In that process I can imagine
-// that the range of elevations is lower for the correct style than for the opposite style.
+// The idea: turn the X displacements along a horizontal line into a summed set of X's. This is something like a surrogate for the
+// elevation changes along the X direction. Do the same for Y and columns. Compare the elevation differences with Y and -Y and sum
+// these up. I was thinking that DirectX Y's would give negated elevations from what OpenGL would.
+// Nah, this doesn't work either (see earlier commits for my first attempt). 
+
 //bool examineForDirectXStyle(progimage_info* src)
 //{
 //	int row, col;
 //	unsigned char* src_data = &src->image_data[0];
-//	bool clamp_border = false;
 //
 //	float* gridx = (float*)malloc(src->height * src->width * sizeof(float));
 //	float* gridy = (float*)malloc(src->height * src->width * sizeof(float));
 //	int index = 0;
+//	float z;
 //
-//	// populate grid with converted values
+//	// populate grid with height summed values
 //	for (row = 0; row < src->height; row++)
 //	{
 //		for (col = 0; col < src->width; col++)
 //		{
-//			CONVERT_CHANNEL_TO_FULL(src_data[0], gridx[index]);
-//			CONVERT_CHANNEL_TO_FULL(src_data[1], gridy[index]);
+//			float x;
+//			CONVERT_CHANNEL_TO_FULL(src_data[0], x);
+//			CONVERT_CHANNEL_TO_FULL(src_data[2], z);
+//			// renormalize, using just X and Z - doesn't seem to matter much
+//			//x = x / sqrt(x * x + z * z);
+//			if (col == 0) {
+//				gridx[index] = x;
+//			}
+//			else {
+//				gridx[index] = x + gridx[index - 1];
+//			}
 //
 //			// next texel
 //			src_data += 3;
 //			index++;
 //		}
 //	}
+//	src_data = &src->image_data[0];
+//	for (col = 0; col < src->width; col++)
+//	{
+//		for (row = 0; row < src->height; row++)
+//		{
+//			index = row * src->width + col;
+//			float y;
+//			CONVERT_CHANNEL_TO_FULL(src_data[index*3+1], y);
+//			CONVERT_CHANNEL_TO_FULL(src_data[2], z);
+//			// renormalize, using just Y and Z - doesn't seem to matter much
+//			//y = y / sqrt(y * y + z * z);
+//			if (row == 0) {
+//				gridy[index] = y;
+//			}
+//			else {
+//				gridy[index] = y + gridy[index - src->width];
+//			}
+//		}
+//	}
 //
-//	// now look at values: is a texel a peak, valley, or cusp?
-//	int parabola = 0;
-//	int hyperbola = 0;
+//	// now look at values: keep track of difference with Y and -Y
+//	float diff_pos_y = 0.0f;
+//	float diff_neg_y = 0.0f;
+//	float elevation_x = 0.0f;
+//	float elevation_y = 0.0f;
+//	index = 0;
 //	for (row = 0; row < src->height; row++)
 //	{
-//		// Ensure value is not negative by adding height to trow
-//		int trow = (row + src->height - 1) % src->height;
-//		int brow = (row + 1) % src->height;
-//		if (clamp_border) {
-//			// undo the wraps if we want to clamp to the border
-//			if (trow >= src->height - 1)
-//				trow = 0;
-//			if (brow == 0)
-//				brow = src->height - 1;
-//		}
 //		for (col = 0; col < src->width; col++)
 //		{
-//			bool xpeak = false;
-//			bool xvalley = false;
-//			bool ypeak = false;
-//			bool yvalley = false;
-//			int lcol = (col + src->width - 1) % src->width;
-//			int rcol = (col + 1) % src->width;
-//			if (clamp_border) {
-//				// undo the wraps if we want to clamp to the border
-//				if (lcol >= src->width - 1)
-//					lcol = 0;
-//				if (rcol == 0)
-//					rcol = src->width - 1;
-//			}
-//			if (gridx[row * src->width + col] > gridx[row * src->width + lcol] &&
-//				gridx[row * src->width + col] > gridx[row * src->width + rcol]) {
-//				xpeak = true;
-//			}
-//			else if (gridx[row * src->width + col] < gridx[row * src->width + lcol] &&
-//				gridx[row * src->width + col] < gridx[row * src->width + rcol]) {
-//				xvalley = true;
-//			}
-//			if (gridy[row * src->width + col] > gridy[trow * src->width + col] &&
-//				gridy[row * src->width + col] > gridy[brow * src->width + col]) {
-//				ypeak = true;
-//			}
-//			else if (gridy[row * src->width + col] < gridy[trow * src->width + col] &&
-//				gridy[row * src->width + col] < gridy[brow * src->width + col]) {
-//				yvalley = true;
-//			}
-//
-//			// did we get a parabola or hyperbola?
-//			if ((xpeak && ypeak) || (xvalley && yvalley)) {
-//				parabola++;
-//			}
-//			else if ((xpeak && yvalley) || (xvalley && ypeak)) {
-//				hyperbola++;
-//			}
+//			diff_pos_y += abs(gridx[index] - gridy[index]);
+//			diff_neg_y += abs(gridx[index] + gridy[index]);
+//			elevation_x += gridx[index];
+//			elevation_y += gridy[index];
 //
 //			// next texel
 //			index++;
 //		}
 //	}
-//	std::wcout << "  I think it's a " << ((parabola >= hyperbola) ? "OpenGL-style" : "DirectX-style") << " normals texture because parabola = " << parabola << " and hyperbola = " << hyperbola << "\n";
+//
+//	int image_size = src->width * src->height;
+//	// This first one, correlated, seems somewhat more trustworthy, but still is wrong. For JG-RTX _normal.png files, gets it right 930 times, wrong 139 times
+//	std::wcout << "  I think it's a " << ((diff_pos_y >= diff_neg_y) ? "OpenGL-style" : "DirectX-style") << " normals texture because pos y = " << diff_pos_y / image_size << " and neg y = " << diff_neg_y / image_size << "\n";
+//	std::wcout << "  Or maybe it's a " << (((elevation_x > 0.0f) != (elevation_y > 0.0f)) ? "OpenGL-mode" : "DirectX-mode") << " normals texture because elevation_x = " << elevation_x / image_size << " and elevation_y = " << elevation_y / image_size << "\n";
 //	free(gridx);
 //	free(gridy);
-//	return parabola >= hyperbola;
+//	return diff_pos_y >= diff_neg_y;
 //}
 
 // assumes 3 channels are input
