@@ -1209,7 +1209,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 			// no Zanalysis, since with XY we always derive Z precisely
 			// If a reason for categorizing the XY was already given, don't repeat here
 			if (!reason_xy) {
-				std::wcout << "  Note: For the input Z's, assuming Z -1 to 1, " << 100.0f * (float)z_outside_bounds / (float)image_size << "% of the texel Z values\n    are more than 2 levels from being properly normalized.\n";
+				std::wcout << "  Note: For the input Z's, assuming Z -1 to 1, " << 100.0f * (float)z_outside_bounds / (float)image_size << "% of the texel Z values (" << z_outside_bounds << " texels)\n    are more than 2 levels from being properly normalized.\n";
 				std::wcout << "    The Z values were found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
 			}
 			std::wcout << "  Average input Z channel values, if mapped from -1 to 1: " << (float)(zsum / (double)image_size) << "\n";
@@ -1443,7 +1443,7 @@ bool Zanalysis(int image_type, int image_field_bits, int image_size, int *normal
 			else {
 				// some Z values were way out of range
 				std::wcout << "  *Problem: the Z values (assuming range -1 to 1) were found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
-				std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << "% of the texel Z values are more than two from being properly normalized.\n";
+				std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << "% of the texel Z values (" << z_outside_bounds << " texels) are more than two from being properly normalized.\n";
 				std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << "% of the XYZ normals are perfectly normalized,\n    "
 					<< 100.0f * (float)normal_length_zneg[1] / (float)image_size << "% are just 1 level away, and\n    "
 					<< 100.0f * (float)normal_length_zneg[2] / (float)image_size << "% are 2 levels away.\n";
@@ -1478,7 +1478,7 @@ bool Zanalysis(int image_type, int image_field_bits, int image_size, int *normal
 			else {
 				// some Z values were way out of range
 				std::wcout << "  *Problem: the stored z values (assuming range 0 to 1) were found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
-				std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << "% (" << z_outside_bounds << " texels) of the texel Z values are more than two from being properly normalized.\n";
+				std::wcout << "  " << 100.0f * (float)z_outside_bounds / (float)image_size << "% of the texel Z values (" << z_outside_bounds << " texels) are more than two from being properly normalized.\n";
 				std::wcout << "  " << 100.0f * (float)normal_length_zneg[0] / (float)image_size << "% of the XYZ normals are perfectly normalized,\n    "
 					<< 100.0f * (float)normal_length_zneg[1] / (float)image_size << "% are just 1 level away, and\n    " 
 					<< 100.0f * (float)normal_length_zneg[2] / (float)image_size << "% are 2 levels away.\n";
