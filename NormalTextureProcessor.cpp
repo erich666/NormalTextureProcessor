@@ -1121,7 +1121,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 		if (image_type == 0) {
 			image_type = IMAGE_TYPE_NORMAL_FULL;
 			if (gOptions.analyze) {
-				std::wcout << "Image fileis likely a standard normals texture.\n";
+				std::wcout << "Image file '" << inputFile << "' is likely a standard normals texture.\n";
 			}
 		}
 		else {
@@ -1666,7 +1666,7 @@ bool Zanalysis(int image_type, int image_field_bits, int image_size, int normal_
 			must_clean = true;
 			if (gOptions.analyze) {
 				if (image_field_bits & IMAGE_Z_NORMALS_CLOSE) {
-					std::wcout << "  Some texels do not have good Z values,\n    though all normals are pretty close to 1.0 in length.\n  " << 100.0f * (float)normal_good / (float)image_size << "% of the XYZ normals are normalized well (" << normal_good << " texels).\n";
+					std::wcout << "  Some texels do not have good Z values,\n    though all normals are pretty close to 1.0 in length.\n  " << 100.0f * (float)normal_good / (float)image_size << "% of the XYZ normals are normalized well (" << normal_good << " texels), the rest (" << normal_close << " texels) are close.\n";
 				}
 				else {
 					// some Z values were way out of range
@@ -1709,14 +1709,14 @@ bool Zanalysis(int image_type, int image_field_bits, int image_size, int normal_
 			must_clean = true;
 			if (gOptions.analyze) {
 				if (image_field_bits & IMAGE_Z_NORMALS_CLOSE_ZZERO) {
-					std::wcout << "  Some texels do not have good z-values (for Z-Zero),\n    though all normals are pretty close to 1.0 in length.\n  " << 100.0f * (float)normal_good / (float)image_size << "% of the XYZ normals are good.\n";
+					std::wcout << "  Some texels do not have great z-values (for Z-Zero),\n    though all normals are pretty close to 1.0 in length.\n  " << 100.0f * (float)normal_good / (float)image_size << "% of the XYZ normals are normalized well (" << normal_good << " texels), the rest (" << normal_close << " texels) are close.\n";
 				}
 				else {
 					// some Z values were way out of range
 					std::wcout << "  *Problem: bad normals, with the Z values (assuming range 0 to 1) found to be as far off as " << zmaxabsdiff << " levels in expected value.\n";
-					std::wcout << "  " << 100.0f * (float)normal_good / (float)image_size << "% of the XYZ normals are good,\n    "
-						<< 100.0f * (float)normal_close / (float)image_size << "% are close, and\n    "
-						<< 100.0f * (float)(image_size - normal_close - normal_good) / (float)image_size << "% are pretty bad.\n";
+					std::wcout << "  " << 100.0f * (float)normal_good / (float)image_size << "% of the XYZ normals are normalized well (" << normal_good << " texels),\n    "
+						<< 100.0f * (float)normal_close / (float)image_size << "% are close (" << normal_close << " texels), and\n    "
+						<< 100.0f * (float)(image_size - normal_close - normal_good) / (float)image_size << "% are pretty bad (" << image_size - normal_close - normal_good << " texels).\n";
 				}
 			}
 		}
