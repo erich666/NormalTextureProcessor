@@ -68,9 +68,9 @@ Adding '-izneg' says to assume the incoming textures are "standard" -1 to 1 Z-va
 
 You can also feed in an input directory located elsewhere:
 ```sh
-NormalTextureProcessor.exe -a -idir flora/materials/normal_textures > analysis.log
+NormalTextureProcessor.exe -a -idir flora/materials/normal_textures > analysis.log 2>&1
 ```
-The "> analysis.log" is optional, it's a way to put all the analysis into a file.
+The "> analysis.log 2>&1" is optional, it's a way to put all the analysis and any warnings or errors into a file.
 
 There are three main types of normals textures this program recognizes. They are:
 * RGB "standard" normals textures: each color channel is interpreted as representing numbers that go from -1.0 to 1.0, for all channels.
@@ -97,11 +97,11 @@ A different class of normals texture is the heightfield texture, often called a 
 
 You can also output a heatmap of where errors are in your input image file (except for heightfields). Specify '-oheatmap' says to make the output file show these. The red channel is set to 255 wherever the texel has X and Y values that give a vector length > 1.0 + epsilon (of 1/255), red of 128 if the length is just barely above 1.0. For input normals textures categorized as standard or Z-zero, the green channel shows a medium green when the texel's XYZ normal length, converted to RGB, is off by two color levels, and shows full green when 3 levels or more. The blue channel shows negative Z values for standard input normal textures, starting with 128 for slightly negative scaling up to 255 for Z stored as -1. Remember that "XY-only" normal textures can be forced to be interpreted as standard by '-izneg', which will then highlight the XYZ length differences found.
 
-Here's an example run to generate a heatmap of the test file "r_normal_map.png" and the result:
+Here's an example run to generate a heatmap of the test file "ntp_resize_512.png", which has normalization errors due to resizing, and the result:
 ```sh
-.\x64\Release\NormalTextureProcessor.exe -idir test_files\Standard -odir test_files\output_Heatmap -oall -a -v -oheatmap r_normal_map.png
+.\x64\Release\NormalTextureProcessor.exe -idir test_files\Standard -odir test_files\output_Heatmap -oall -a -v -oheatmap ntp_resize_512.png
 ```
-![Heatmap of r_normal_map.png](readme_heatmap.png "Heatmap of r_normal_map.png")
+![Heatmap of ntp_resize_512.png](readme_heatmap.png "Heatmap of ntp_resize_512.png")
 
 You can also dump out the bad pixels found in a file, or all pixel values and their conversions. Add the '-csve' argument to dump to the output directory a comma-separated-value file of texels that are not "perfect" (roundtrippable - see "Algorithms"), or '-csv' to dump all texel values. You also _must_ specify the input file type (-izneg|-izzero|-ixy) as the CSV file is generated as the file is read in, before any analysis. Here's an example:
 ```sh
