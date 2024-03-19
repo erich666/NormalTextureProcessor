@@ -17,6 +17,26 @@ Each directory's contents:
 
 ![lava_flow_n.png](./Standard/lava_flow_n.png "lava_flow_n.png")
 
+**ntp_heightfield_gimp.png** - conversion of the **ntp_heightfield.png** heightfield to a normals texture with [GIMP](https://www.gimp.org/) using [these instructions](https://docs.gimp.org/en/gimp-filter-normal-map.html).
+
+![ntp_heightfield_gimp.png](./Standard/ntp_heightfield_gimp.png "ntp_heightfield_gimp.png")
+
+**ntp_heightfield_gimp_5scale.png** - conversion of the **ntp_heightfield.png** heightfield to a normals texture with [GIMP](https://www.gimp.org/), changing the scale to 5, using [these instructions](https://docs.gimp.org/en/gimp-filter-normal-map.html).
+
+![ntp_heightfield_gimp_5scale.png](./Standard/ntp_heightfield_gimp_5scale.png "ntp_heightfield_gimp_5scale.png")
+
+**ntp_heightfield_normalmap_online.png** - conversion of the **ntp_heightfield.png** heightfield to a normals texture with [Normalmap Online](https://cpetry.github.io/NormalMap-Online/), setting "Z-Range -1 to +1".
+
+![ntp_heightfield_normalmap_online.png](./Standard/ntp_heightfield_normalmap_online.png "ntp_heightfield_normalmap_online.png")
+
+**ntp_resize_128.png** - the result file **ntp_heightfield_normalmap_online.png** resized to 128x128 using IrfanView. Doing a naive resize causes normals to no longer be normalized, see results in directory \_output_Heatmap.
+
+![ntp_resize_128.png](./Standard/ntp_resize_128.png "ntp_resize_128.png")
+
+**ntp_resize_512.png** - the result file **ntp_heightfield_normalmap_online.png** resized to 512x512 using IrfanView. Doing a naive resize causes normals to no longer be normalized, see results in directory \_output_Heatmap.
+
+![ntp_resize_512.png](./Standard/ntp_resize_512.png "ntp_resize_512.png")
+
 **r_normal_map.png** - letter R squiggles (see Heightfields directory) in standard form. Not quite correct, making it a good test. From the [USD Assets Working Group](https://github.com/usd-wg/assets/tree/main/test_assets/NormalsTextureBiasAndScale) Normals Texture Bias And Scale test, license CC-NC-BY-SA.
 
 ![r_normal_map.png](./Standard/r_normal_map.png "r_normal_map.png")
@@ -25,7 +45,7 @@ Each directory's contents:
 
 ![r_normal_map_reversed_y.png](./Standard/r_normal_map_reversed_y.png "r_normal_map_reversed_y.png")
 
-**squiggles_gimp.png** - squiggles (see Heightfields directory) converted using [GIMP](https://www.gimp.org/) using [these instructions](https://docs.gimp.org/en/gimp-filter-normal-map.html). GIMP evidently uses the DirectX style for output by default, though has a "Flip Y" and other options to adjust the style.
+**squiggles_gimp.png** - squiggles (see Heightfields directory) converted with [GIMP](https://www.gimp.org/) using [these instructions](https://docs.gimp.org/en/gimp-filter-normal-map.html). GIMP evidently uses the DirectX style for output by default, though has a "Flip Y" and other options to adjust the style.
 
 ![squiggles_gimp.png](./Standard/squiggles_gimp.png "squiggles_gimp.png")
 

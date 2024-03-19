@@ -77,13 +77,13 @@ There are three main types of normals textures this program recognizes. They are
 * RGB normal, "Z-zero": as above, but the blue, Z, channel is instead interpreted as going from 0.0 to 1.0.
 * heightfield texture: an elevation texture, usually a grayscale image, typically with black representing the lowest elevation and white the highest.
 
-The first type, where Z goes from -1 to 1, is the type that is the most popular nowadays, from what I've seen. Usually this texture is applied to a surface, so that the normals on the texture are relative to the interpolated (shading) normal of the surface itself. So, for example, a curved surface made of polygons is rendered. At a given surface location (typically) the shading normal is interpolated from vertex normals, defining the normal (Z) direction of the surface, along with X and Y basis vectors. This is known as ["tangent space"](https://80.lv/articles/tutorial-types-of-normal-maps-common-problems/). The normal is retrieved from the normals texture and modifies the surface normal.
+The first type, where Z goes from -1 to 1, is the type that is the most popular nowadays. Usually this texture is applied to a surface, so that the normals on the texture are relative to the interpolated (shading) normal of the surface itself. So, for example, a curved surface made of polygons is rendered. At a given surface location (typically) the shading normal is interpolated from vertex normals, defining the normal (Z) direction of the surface, along with X and Y basis vectors. This is known as ["tangent space"](https://80.lv/articles/tutorial-types-of-normal-maps-common-problems/). The normal is retrieved from the normals texture and modifies the surface normal.
 
 This first type has a few variants to it. One is that Y direction on the texture can be up or down. That is, the normals texture can be thought of as "X to the right, Y up" for how its normal is interpreted. A normal of, say, (0.2, 0.3, 0.933) can be thought of as pointing 0.2 to the right, 0.3 up. That is the OpenGL interpretation. The normal's Y direction could also be considered as pointing down, i.e., think of the upper left corner as the origin and Y pointing down. This is the DirectX interpretation. See [this page](https://github.com/usd-wg/assets/tree/main/test_assets/NormalsTextureBiasAndScale) for more information and examples, and search [this page](https://80.lv/articles/tutorial-types-of-normal-maps-common-problems/) for "invert" for a wider view. OpenGL and DirectX are two major different forms you'll run across, i.e., no one reverses the X direction normally. If you use the wrong type of texture in a renderer you will see artifacts such as objects looking like they're being lit from below, for example. The glTF file format requires the OpenGL style normals texture, USD assumes OpenGL but can use scale and bias settings to support DirectX. Currently the analysis program does not have code to tell OpenGL-style files from DirectX-style files. I have some ideas how to guess using statistics as to which format a normals texture is, but haven't examined the problem yet.
 
 For this first type, all (8-bit) values map from value 0 through 255 to the range -1.0 to 1.0. However, if you think about putting normals on a surface, a value where Z is less than 0.0 makes little sense. It would define a normal pointing into the surface, but the surface itself is at best thought of as a displaced heightfield (faked by using a normals texture instead), so there should not be any overhangs or other geometry where the Z value could go negative. One of the checks the analysis mode "-a" does is checks if the Z value is ever lower than 0.0. If it does, this is flagged as a problem.
 
-The second type of normals texture, what I call "Z-zero", maps the 0 to 255 8-bit blue channel value to the range 0.0 to 1.0, instead of -1.0 to 1.0. There then can be no negative values for Z, and the precision of the Z value can be one bit higher. This all sounds good, but this format is (in my experience) now rarely seen. If anyone understands this evolutionary step, let me know. The reality is that this format is not supported in glTF, though can be supported in USD by using bias and scale values. Again, see [this page](https://github.com/usd-wg/assets/tree/main/test_assets/NormalsTextureBiasAndScale) for examples and more information. It is difficult to simply look at a "Z-zero" texture and tell it apart from a normals texture of the (now-popular) first type. By analyzing the Z values of the input texture and seeing whether they are negative and, more importantly, whether the (X,Y,Z) triplet formed has a vector length of nearly 1.0, we can usually tell these two types apart. That is, the program tries both conversions, standard and Z-zero, and sees which of the two normals formed is approximately 1.0 in length. This determination is the major reason this program exists, as sometimes incorrect textures slip through into test suites.
+The second type of normals texture, what I call "Z-zero", maps the 0 to 255 8-bit blue channel value to the range 0.0 to 1.0, instead of -1.0 to 1.0. There then can be no negative values for Z, and the precision of the Z value can be one bit higher. This all sounds good, but this format is (in my experience) now rarely seen. If anyone understands this evolutionary step, let me know. The reality is that this format is not supported in glTF. It can be supported in USD by using bias and scale values. Again, see [this page](https://github.com/usd-wg/assets/tree/main/test_assets/NormalsTextureBiasAndScale) for USD examples and more information. It is difficult to simply look at a "Z-zero" texture and tell it apart from a normals texture of the (now-popular) first type, especially if the bumps are not sharp. By analyzing the Z values of the input texture and seeing whether they are negative and whether the (X,Y,Z) triplet formed has a vector length of nearly 1.0, we can usually tell these two types apart. That is, the program tries both conversions, standard and Z-zero, and sees which of the two normals formed is approximately 1.0 in length. This determination is the major reason this program exists, as sometimes incorrect textures slip through into test suites.
 
 Another problem sometimes seen with both types of normals texture is that just the X and Y values (ignoring Z) form a vector that is longer than 1.0. This can happen due to (poor) resizing or filtering of normals textures, slightly incorrect conversion formulas, or who knows what else. The analysis notes how many (X,Y) vectors are too long.
 
@@ -95,11 +95,11 @@ There are other variants of using XYZ coordinates, such as ["best fit normals" (
 
 A different class of normals texture is the heightfield texture, often called a bump or height map. The format is usually a single channel (such as the red channel) or a grayscale image. Black is usually the lowest level, white the highest elevation. Analysis tries some basic testing to see if a texture may be a heightfield texture. Heightfield textures are often used to create normals textures, e.g., [GIMP has this functionality](https://docs.gimp.org/en/gimp-filter-normal-map.html). There is a scale (not stored in the image) that needs to be provided for the heightfield so that the conversion can be done. I have occasionally seen heightmap textures get intermingled with normals textures, so the program tries to identify these.
 
-You can also output a heatmap of where errors are in your input image file (except for heightfields). Specify '-oheatmap' says to make the output file show these. The red channel is set to 255 wherever the texel has X and Y values that give a vector length > 1.0. For input normals textures categorized as standard or Z-zero, the green channel shows a dark green when the texel's Z value is off by one "b" level, lighter green for two levels, and full green when 3 levels or more. The blue channel shows negative Z values for standard input normal textures, starting with 128 for slightly negative scaling up to 255 for Z stored as -1. Remember that "XY-only" normal textures can be forced to be interpreted as standard by '-izneg', which will then highlight the z differences found.
+You can also output a heatmap of where errors are in your input image file (except for heightfields). Specify '-oheatmap' says to make the output file show these. The red channel is set to 255 wherever the texel has X and Y values that give a vector length > 1.0 + epsilon (of 1/255), red of 128 if the length is just barely above 1.0. For input normals textures categorized as standard or Z-zero, the green channel shows a medium green when the texel's XYZ normal length, converted to RGB, is off by two color levels, and shows full green when 3 levels or more. The blue channel shows negative Z values for standard input normal textures, starting with 128 for slightly negative scaling up to 255 for Z stored as -1. Remember that "XY-only" normal textures can be forced to be interpreted as standard by '-izneg', which will then highlight the XYZ length differences found.
 
 Here's an example run to generate a heatmap of the test file "r_normal_map.png" and the result:
 ```sh
-.\x64\Release\NormalTextureProcessor.exe -idir test_files\Standard -odir test_files\output_Standard -oall -a -v -oheatmap r_normal_map.png
+.\x64\Release\NormalTextureProcessor.exe -idir test_files\Standard -odir test_files\output_Heatmap -oall -a -v -oheatmap r_normal_map.png
 ```
 ![Heatmap of r_normal_map.png](readme_heatmap.png "Heatmap of r_normal_map.png")
 
@@ -109,14 +109,18 @@ You can also dump out the bad pixels found in a file, or all pixel values and th
 ```
 which will generate the file test_files/output_Standard/squiggles_normalmap_online_zneg.csv. The rightmost columns will show what sort of bad thing is happening with each texel: whether it's near (1 or 2 levels) or far (X) away from being an XY length below 1.0, whether Z is as expected or not, and whether the stored Z was negative.
 
+It's important to look at the normal length vs. variation in the separate XYZ values. An an example, say a texel's RGB is (127,0,139). XYZ=(-0.00392, -1.0, 0.09019). The vector length is 1.004066. If you cleaned this pixel, holding X and Y constant, the blue value would change, to (127,0,128). The difference in blue is large: 139 vs. 128, 0.09 vs. 0.00. The problem is that an extreme Y value, where G=0 gives Y=-1.0, forces Z to be as small as possible, B=128.
+
+This program considers (127,0,139) to be correct. It tests by varying the RGB values of the triplet by +/-1, converts, and looks at the normal lengths formed for all nine triplet combinations. If at least one triplet gives a normal length of less than or equal to 1.0 and at least one has normal length of greater than or equal to 1.0, then the triplet is considered valid. If you want something more exact, change the code! Only if a triplet gives a normal outside this range is the texture flagged as in need of cleaning.
+
 ### Cleanup and Conversion
 
 In addition to analysis, this program cleans up and convert to different formats. Specify an output directory with '-odir _out_directory_name_'. The output file name will match the input file name, though always uses PNG for output. Be careful: if the input and output directories are the same or both are not specified (and so match), texture files will be written over in place.
 
 Typical operations include:
 * Clean up the normals in a texture. Use option '-oclean' to output only those files that need cleanup, '-oall' to output all files. Given a particular type of RGB texture, the program makes sure the normals are all properly normalized and that no Z values are negative.
-  * If you want to maintain the sign of the Z value, use the '-allownegz' option.
-  * If you set the input file type (-izneg|-izzero|-ixy), '-oclean' will force the cleaning and output of all files found.
+  * If you want to maintain the (possibly negative) sign of the Z value, use the '-allownegz' option.
+  * If you set the input file type (-izneg|-izzero|-ixy), '-oclean' will clean all files found to not be of that type.
 * Convert between formats.
   * OpenGL to DirectX, standard to Z-zero, or vice versa. OpenGl-style is the default, use '-idx' to note that the input files are DirectX-style (does not affect heightfields), '-odx' to set that you want to output in DirectX-style.
   * To export to the Z-Zero format, where Z goes from 0 to 1 instead of -1 to 1, use '-ozzero'.
@@ -125,7 +129,7 @@ Typical operations include:
   * To specify how the input heightfield data is scaled, use '-hfs #', where you give a scale factor. The value is 5.0 by default.
   * By default heightfields are considered to repeat, meaning that along the edges heights "off the texture" are taken from the opposite edge. TBD: do the borders wrap or are they "doubled" or something else, such as maintaining slope. '-hborder'
 
-This cleanup process comes with a caveat: garbage in, garbage out. If your normals textures have XY values that are trustworthy and you know the Z values are wonky for some reason, this tool can properly fix the Z values. If your normals are just plain unnormalized, where X, Y, and Z are the right direction but the wrong length, this tool will not properly fix your texture, since it assumes X and Y are their proper lengths and Z was badly derived. If you do happen to learn that your textures are this way - right directions, wrong lengths - let me know and I can add an option to fix the texture's normals in this way. The program itself cannot determine which type of error is occurring, so it assumes that only the Z value is invalid.
+This cleanup process comes with a caveat: garbage in, garbage out. If your normals textures have XY values that are trustworthy and you know the Z values are wonky for some reason, this tool can properly fix the Z values, deriving from XY. If your normals are just plain unnormalized in general, where X, Y, and Z are the right direction but the wrong length (see "BFN"), this tool will not properly fix your texture, since it assumes X and Y are their proper lengths and Z was badly derived. The program itself cannot determine which type of error is occurring, so it assumes that only the Z value is invalid. Also, if an image is cleaned, currently _all_ normals will be examined cleaned and made "roundtrippable" (see below). Basically, if bad normals are found, it's assumed all Z values should be rederived.
 
 Tools such as [BeyondCompare](https://www.scootersoftware.com/) are worthwhile for comparing the original image with its modified version. You can hover over individual texels and see how the values have changed. Here's an example diff, with the tolerance set to 2 texel levels difference in any channel; red is more, blue is equal or less, gray is no difference.
 
@@ -143,7 +147,7 @@ In other tests, such as the [StainedGlassLamp](https://github.com/KhronosGroup/g
 
 ![StainedGlassLamp, original vs. normalization corrected](readme_lamp_render_diff.png "StainedGlassLamp, original vs. normalization corrected")
 
-Long and short, storing the normals incorrectly is a source of error. This program can, at the minimum, tip you off when your normals are not normalized, and provide properly normalized textures by correcting the Z values.
+Long and short, storing the normals incorrectly is a source of error. This program can, at the minimum, tip you off when your normals are not or poorly normalized, and provide properly normalized textures by correcting the Z values.
 
 ## Algorithms
 
@@ -172,7 +176,7 @@ r = (unsigned char)(((x + 1.0f)/2.0f)*255.0f + 0.5f);
 g = (unsigned char)(((y + 1.0f)/2.0f)*255.0f + 0.5f);
 b = (unsigned char)(((z + 1.0f)/2.0f)*255.0f + 0.5f);
 ```
-The final 0.5f rounding value on each line is important for consistency of conversion, to make roundtripping work properly.
+The final 0.5f rounding value on each line is important for consistency of conversion, to make roundtripping work properly. I believe that not adding in the 0.5f and rounding is the source of error in various normals textures creators. See the analysis below of GIMP's (incorrect) formula for more explanation.
 
 The code above shows where the bias of 1.0 and scale of 2.0 are applied. The equations can be rearranged to:
 ```sh
@@ -194,7 +198,7 @@ x = -0.423667967
 y = 0.271147490
 z = 0.864282646
 ```
-This vector has a length of 0.99999999988 - very close to 1.0. The Z value is quite precise
+This vector has a length of 0.99999999988 - very close to 1.0. The Z value is precise.
 
 If you convert each channel directly to 8-bit rgb, you get:
 ```sh
@@ -236,6 +240,36 @@ What roundtripping implies is that the length of the normal being close to 1.0 i
 
 This program aims to provide stable rgb triplets, ones where if the Z value is derived from X and Y, the "b" value is the same as the original value. Internally, this means that we always derive the Z value from the 8-bit r and g values, as shown, so that the result "b" value is the same as the derived "b". When reading in normals rgb textures, the program always derives the Z value as explained, so gives consistent results. That is, if you clean up a normals texture, the program's clean image will not change if you clean it again. Where this principle affects the code a bit more is when using a heightfield to compute an XYZ normal. As shown above, to make a roundtrippable rgb triplet, we have to convert XY to rg, then rg back to let's call it XY', the XY values that come from the 8-bit precision r and g values. Then Z is computed as usual and the b value created from it.
 
+## Creator Testing
+
+Ideally, it would be great if all tools creating normals textures did things perfectly. I examined some tools' code to see if they were correct.
+
+### GIMP
+
+[GIMP|https://www.gimp.org/] has a tool to make [normals textures from heightfields](https://docs.gimp.org/en/gimp-filter-normal-map.html). It's easy to use, with lots of options for different mappings. The code is [here](https://code.google.com/archive/p/gimp-normalmap/source/default/source) and [here](https://github.com/RobertBeckebans/gimp-plugin-normalmap), with normalmap.c appearing to be the key piece.
+
+Looking at the code, I noticed a problem with conversion back to RGB. [Lines 1056-1058 of normalmap.c](https://github.com/RobertBeckebans/gimp-plugin-normalmap/blob/master/normalmap.c#L1056) are:
+```sh
+*d++ = (unsigned char)((n[0] + 1.0f) * 127.5f);
+*d++ = (unsigned char)((n[1] + 1.0f) * 127.5f);
+*d++ = (unsigned char)((n[2] + 1.0f) * 127.5f);
+```
+This is not quite right, as there's no rounding value added in. The code should be:
+```sh
+*d++ = (unsigned char)((n[0] + 1.0f) * 127.5f + 0.5f);
+*d++ = (unsigned char)((n[1] + 1.0f) * 127.5f + 0.5f);
+*d++ = (unsigned char)((n[2] + 1.0f) * 127.5f + 0.5f);
+```
+Proof by examination: say I convert X=-0.999 and X=0.999. By the original code I would get R=0 and R=254. I would expect symmetric results, R rounding to the same limits. With the corrected formula I get R=0 and R=255, maintaining symmetry. Another proof is that X=0 converts to 127.5 in the original code, 128.0 in the new. The value 127.5 has a logic to it, being exactly between 0.0 and 255.0, but the fraction 0.5 is then dropped instead of rounded. By adding 0.5 we get 128.0, which in floating point terms is right on the border between 127 and 128 (that is, level 127 goes from 127.0 to 127.99999...). So, adding 0.5 and rounding is correct, as 127 and 128 is the dividing line between negative and positive X (or Y or Z) values.
+
+What makes this all a bit confusing is that X=0.0 doesn't have an exact 8-bit RGB equivalent, since 127/128 is the dividing line. Whenever I see a B value of 127 stored in a normals texture, I suspect the round-off was done incorrectly.
+
+Note that my corrected code here would affect all channels, R, G, and B, so that the XY values stored in RG are also slightly off. With the original, incorrect code, they're a bit more negative than expected because of the missing roundoff value.
+
+### Normals Online
+
+[Normalmap Online](https://cpetry.github.io/NormalMap-Online/), [github](https://github.com/cpetry/NormalMap-Online), has interactive conversion of heightfields to normals textures. The results are good, with normals appearing to be properly formed. The code [here](https://github.com/cpetry/NormalMap-Online/blob/gh-pages/javascripts/shader/NormalMapFromPicturesShader.js#L53) and [here](https://github.com/cpetry/NormalMap-Online/blob/gh-pages/javascripts/shader/NormalMapShader.js#L83) looks fine, it normalizes the data before assignment. I assume gl_FragColor properly rounds XYZ values fed to it.
+
 ## Resources
 
 Some resources I've found useful:
@@ -267,4 +301,4 @@ Potential tasks (no promises! and, suggestions welcome):
 - [ ] Ignore texels that are black or white (probably unused in texture, except for heightfields). Adjust statistics, CSV output, etc.
 - [ ] Support 16-bit PNG files fully, input and output. Also properly convert channel values that have less than 8 bits.
 - [ ] Ignore texels with alpha values of 0.
-- [ ] Recursively examine and clean up normals texture files. Pretty easy to add, but I think I _won't_ do it, because the program doesn't know how to perfectly differentiate a normals texture from something else. So, it's better to analyze a directory, then feed in the specific files you want/need to cleanup.
+- [ ] Recursively examine and clean up normals texture files, searching by file type. If the output directory is specified, cleaned or heatmap files would be put there, without the corresponding subdirectory paths.
