@@ -262,7 +262,7 @@ This is not quite right, as there's no rounding value added in. The code should 
 ```
 Proof by examination: say I convert X=-0.999 and X=0.999. By the original code I would get R=0 and R=254. I would expect symmetric results, R rounding to the same limits. With the corrected formula I get R=0 and R=255, maintaining symmetry. Another proof is that X=0 converts to 127.5 in the original code, 128.0 in the new. The value 127.5 has a logic to it, being exactly between 0.0 and 255.0, but the fraction 0.5 is then dropped instead of rounded. By adding 0.5 we get 128.0, which in floating point terms is right on the border between 127 and 128 (that is, level 127 goes from 127.0 to 127.99999...). So, adding 0.5 and rounding is correct, as 127 and 128 is the dividing line between negative and positive X (or Y or Z) values.
 
-What makes this all a bit confusing is that X=0.0 doesn't have an exact 8-bit RGB equivalent, since 127/128 is the dividing line. Whenever I see a B value of 127 stored in a normals texture, I suspect the round-off was done incorrectly.
+What makes this all a bit confusing is that X=0.0 doesn't have an exact 8-bit RGB equivalent, since 127/128 is the dividing line. Whenever I see a B value of 127 stored in a normals texture, I suspect the round-off was done incorrectly, because 127 converts to a slightly negative value, -0.003921.
 
 Note that my corrected code here would affect all channels, R, G, and B, so that the XY values stored in RG are also slightly off. With the original, incorrect code, they're a bit more negative than expected because of the missing roundoff value.
 
