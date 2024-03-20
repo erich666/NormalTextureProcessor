@@ -246,7 +246,7 @@ Ideally, it would be great if all tools creating normals textures did things per
 
 ### GIMP
 
-[GIMP[(https://www.gimp.org/) has a tool to make [normals textures from heightfields](https://docs.gimp.org/en/gimp-filter-normal-map.html). It's easy to use, with lots of options for different mappings. The code is [here](https://code.google.com/archive/p/gimp-normalmap/source/default/source) and [here](https://github.com/RobertBeckebans/gimp-plugin-normalmap), with normalmap.c appearing to be the key piece.
+[GIMP](https://www.gimp.org/) has a tool to make [normals textures from heightfields](https://docs.gimp.org/en/gimp-filter-normal-map.html). It's easy to use, with lots of options for different mappings. The code is [here](https://code.google.com/archive/p/gimp-normalmap/source/default/source) and [here](https://github.com/RobertBeckebans/gimp-plugin-normalmap), with normalmap.c appearing to be the key piece.
 
 Looking at the code, I noticed a problem with conversion back to RGB. [Lines 1056-1058 of normalmap.c](https://github.com/RobertBeckebans/gimp-plugin-normalmap/blob/master/normalmap.c#L1056) are:
 ```sh
