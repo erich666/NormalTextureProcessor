@@ -22,7 +22,7 @@ Finally, I've heard - see [tweet replies](https://twitter.com/pointinpolygon/sta
 
 Develop on Windows 10 on Visual Studio 2022 (double-click NormalTextureProcessor.sln, build Release version). You might be able to compile and run it elsewhere, as the program is pretty Windows-free and is purely command-line driven, with no graphical user interface.
 
-The executable is available for download, [zip file here](https://www.realtimerendering.com/erich/download/NormalTextureProcessor.zip). Last updated March 14, 2024.
+The executable is available for download, [zip file here](https://www.realtimerendering.com/erich/download/NormalTextureProcessor.zip). Last updated March 20, 2024.
 
 ### Test Suite
 
@@ -275,14 +275,13 @@ Note that my corrected code here would affect all channels, R, G, and B, so that
 Some resources I've found useful:
 * [Types of Normal Maps & Common Problems](https://80.lv/articles/tutorial-types-of-normal-maps-common-problems/) - a useful page, talking about what uses OpenGL vs. DirectX format by default, XY format, and other aspects, such as not gamma-correcting your normals textures (something I currently don't test for).
 * [Normalmap Online](https://cpetry.github.io/NormalMap-Online/), [github](https://github.com/cpetry/NormalMap-Online) - a web-based normal map creation tool, it takes heightfields and converts to normals textures. By default, Z is mapped from 0 to 1 (old style), but there is a "Z Range" option (that I helped add) that lets you choose -1 to 1. A bit confusing, but what you do is click on the "wavy rings" heightmap image itself. A file dialog comes up and you load your own image. You can then see the RGB texture formed, and the texture applied to a cube in the right. Mouse-drag to change the view of the cube. Lots of options, including true displacement, so you can see the difference between that and just normals textures. Note: the precision of the conversion is not perfect, with some computed normal lengths varying up to four levels from the correct answer.
+* [GIMP conversion](https://docs.gimp.org/en/gimp-filter-normal-map.html) - how to make normals textures from heightfields in GIMP.
+* [Blender's documentation](https://docs.blender.org/manual/en/2.79/render/blender_render/textures/properties/influence/bump_normal.html) - pointers to the format used and baking polygon meshes to normals textures.
+* Other tools to test: [ShaderMap](https://shadermap.com/), [DeepBump](https://hugotini.github.io/deepbump.html), [PixelGraph](https://github.com/null511/PixelGraph-Release); more recommendations appreciated! Fixing the tools themselves is the best long-term solution.
 * [glTF 2.0 specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html) - has much about normals textures.
 * [USD Normals Texture Bias And Scale](https://github.com/usd-wg/assets/tree/main/test_assets/NormalsTextureBiasAndScale) - a set of test normals textures of different types in a USD file, along with copious documentation of how each cube is formed. I made this test.
 * [UsdPreviewSurface](https://openusd.org/release/spec_usdpreviewsurface.html#texture-reader) - the USD specification's basic material. Search on "normal3f" to see more about how to specify it.
-* [GIMP conversion](https://docs.gimp.org/en/gimp-filter-normal-map.html) - how to make normals textures from heightfields in GIMP.
-* [Blender's documentation](https://docs.blender.org/manual/en/2.79/render/blender_render/textures/properties/influence/bump_normal.html) - pointers to the format used and baking polygon meshes to normals textures.
-* Other tools I want to check: [PixelGraph](https://github.com/null511/PixelGraph-Release); more recommendations appreciated! Fixing the tools themselves is the best long-term solution.
 * [_Survey of Efficient Representations for Independent Unit Vectors_](https://jcgt.org/published/0003/02/01/) - Storing normals as XYZ triplets is wasteful, since Z could just be computed from X and Y in most usages. Even storing just X and Y gives pairs of numbers that are unusable, forming vectors longer than 1.0, and the precision is poorly distributed for the rest. This paper and code gives some better alternate representations.
-* Related resources: [DeepBump](https://hugotini.github.io/deepbump.html), better normals from images using deep learning.
 
 ## License
 
