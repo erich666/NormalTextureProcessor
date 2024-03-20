@@ -133,7 +133,7 @@ static wchar_t gConcatErrorString[CONCAT_ERROR_LENGTH];
 // maximum difference in length from 1.0 for normals when saving in [0,255] numbers,
 // when Z value is computed from X and Y
 #define	MAX_NORMAL_LENGTH_DIFFERENCE	0.00387f
-#define	MAX_Z_DIFFERENCE				0.00392f
+#define	MAX_Z_DIFFERENCE				0.00393f
 
 #define VECTOR_LENGTH(x,y,z)	\
 	sqrt(x*x + y*y + z*z)
@@ -812,7 +812,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 			}
 
 			// Check if the range of z values is non-negative. It may just be the normals are not normalized?
-			if (z > -MAX_NORMAL_LENGTH_DIFFERENCE) {
+			if (z > -MAX_Z_DIFFERENCE) {
 				normal_zval_nonnegative++;
 				if (z < 0.0f && !gOptions.allowNegativeZ) {
 					err_z_neg_is_negative = '1';

@@ -301,4 +301,4 @@ Potential tasks (no promises! and, suggestions welcome):
 - [ ] Ignore texels that are black or white (probably unused in texture, except for heightfields). Adjust statistics, CSV output, etc.
 - [ ] Support 16-bit PNG files fully, input and output. Also properly convert channel values that have less than 8 bits.
 - [ ] Ignore texels with alpha values of 0.
-- [ ] Recursively examine and clean up normals texture files, searching by file type. If the output directory is specified, cleaned or heatmap files would be put there, without the corresponding subdirectory paths.
+- [ ] Recursively examine directories and clean up normals texture files, searching by file type. If the output directory is specified, cleaned or heatmap files would be put there, without the corresponding subdirectory paths (possibly overwriting results, if name collisions).
