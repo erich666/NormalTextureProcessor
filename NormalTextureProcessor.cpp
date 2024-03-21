@@ -738,6 +738,7 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 	int zzero_normal_good = 0;
 	int normal_close = 0;
 	int zzero_normal_close = 0;
+	int normal_is_straight_up = 0;
 	for (row = 0; row < imageInfo.height; row++)
 	{
 		for (col = 0; col < imageInfo.width; col++)
@@ -880,15 +881,35 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 				// say just the two shortest components of the normal. KISS.
 				int iv;
 				float xv[3], yv[3], zv[3], zzerov[3];
+				float x_max = -999.0f;
+				float x_min = 999.0f;
+				float y_max = -999.0f;
+				float y_min = 999.0f;
 				for (iv = 0; iv <= 2; iv++) {
 					CONVERT_CHANNEL_TO_FULL((int)src_data[0] - 1 + iv, xv[iv]);
+					if (x_max < xv[iv]) {
+						x_max = xv[iv];
+					}
+					if (x_min > xv[iv]) {
+						x_min = xv[iv];
+					}
 					xv[iv] *= xv[iv];
 					CONVERT_CHANNEL_TO_FULL((int)src_data[1] - 1 + iv, yv[iv]);
+					if (y_max < yv[iv]) {
+						y_max = yv[iv];
+					}
+					if (y_min > yv[iv]) {
+						y_min = yv[iv];
+					}
 					yv[iv] *= yv[iv];
 					CONVERT_CHANNEL_TO_FULL((int)src_data[2] - 1 + iv, zv[iv]);
 					zv[iv] *= zv[iv];
 					CONVERT_CHANNEL_TO_ZERO((int)src_data[2] - 1 + iv, zzerov[iv]);
 					zzerov[iv] *= zzerov[iv];
+				}
+				// note whether normal "spans" straight up
+				if (x_max >= 0.0f && x_min <= 0.0f && y_max >= 0.0f && y_min <= 0.0f) {
+					normal_is_straight_up++;
 				}
 				int ix, iy, iz;
 				for (ix = 0; ix <= 2; ix++) {
@@ -1366,6 +1387,9 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 			if (image_field_bits & IMAGE_ALL_SAME) {
 				std::wcout << "  All values in the texture are the same (normals do not vary): r = " << first_pixel[0] << ", g = " << first_pixel[1] << ", b = " << first_pixel[2] << "; X = " << x << ", Y = " << y << ", Z = " << z << "\n";
 			}
+			else {
+				std::wcout << "  Normals that point essentially straight up: " << 100.0f * (float)normal_is_straight_up / (float)image_size << "% (" << normal_is_straight_up << " texels).\n";
+			}
 		}
 		else if (image_type == IMAGE_TYPE_NORMAL_XY_ONLY) {
 			if (image_field_bits & IMAGE_ALL_SAME) {
@@ -1373,6 +1397,15 @@ bool processImageFile(wchar_t* inputFile, int file_type)
 			}
 			else if ((image_field_bits & IMAGE_R_CHANNEL_ALL_SAME) && (image_field_bits & IMAGE_G_CHANNEL_ALL_SAME)) {
 				std::wcout << "  All XY values in the texture are the same (normals do not vary): r = " << first_pixel[0] << ", g = " << first_pixel[1] << "; X = " << x << ", Y = " << y << "\n";
+				if (normal_is_straight_up == image_size) {
+					std::wcout << "  All normals point essentially straight up.\n";
+				}
+				else {
+					std::wcout << "  Normals that point essentially straight up: " << 100.0f * (float)normal_is_straight_up / (float)image_size << "% (" << normal_is_straight_up << " texels).\n";
+				}
+			}
+			else {
+				std::wcout << "  Normals that point essentially straight up: " << 100.0f * (float)normal_is_straight_up / (float)image_size << "% (" << normal_is_straight_up << " texels).\n";
 			}
 		}
 	}
